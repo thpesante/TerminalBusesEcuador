@@ -89,10 +89,10 @@ const Dashboard = () => {
             Rutas
           </button>
           <button 
-            onClick={() => navigate('/history')}
+            onClick={() => navigate('/my-tickets')}
             className="text-slate-500 hover:bg-slate-100 transition-colors px-3 py-1 rounded-lg text-sm font-headline"
           >
-            Mis Viajes
+            Mis Boletos
           </button>
           <button 
             onClick={() => navigate('/terminal-map')}
@@ -164,7 +164,7 @@ const Dashboard = () => {
           <span className="font-headline text-[10px] font-bold uppercase tracking-widest mt-1">Rutas</span>
         </button>
         <button 
-          onClick={() => navigate('/history')}
+          onClick={() => navigate('/my-tickets')}
           className="flex flex-col items-center justify-center text-slate-400 px-4 py-2"
         >
           <span className="material-symbols-outlined">qr_code_scanner</span>

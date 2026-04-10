@@ -10,6 +10,10 @@ import TerminalSchedule from './pages/TerminalSchedule';
 import TerminalMap from './pages/TerminalMap';
 import CooperativaLoja from './pages/CooperativaLoja';
 import Profile from './pages/Profile';
+import VirtualTerminalView from './pages/VirtualTerminalView';
+import CooperativaDetail from './pages/CooperativaDetail';
+import BookingFlow from './pages/BookingFlow';
+import MyTickets from './pages/MyTickets';
 
 function App() {
   return (
@@ -25,6 +29,10 @@ function App() {
         <Route path="/terminal-map" element={<TerminalMap />} />
         <Route path="/cooperativa-loja" element={<CooperativaLoja />} />
         <Route path="/profile" element={<Profile />} />
+        <Route path="/virtual-terminal" element={<VirtualTerminalView />} />
+        <Route path="/cooperativa/:id" element={<CooperativaDetail />} />
+        <Route path="/booking/:id" element={<BookingFlow />} />
+        <Route path="/my-tickets" element={<MyTickets />} />
       </Routes>
     </BrowserRouter>
   );
