@@ -108,7 +108,7 @@ const VirtualTerminalView: React.FC = () => {
           </nav>
 
           <div className="px-6 mt-auto">
-            <button className="w-full py-4 bg-primary text-white rounded-2xl font-black font-headline tracking-tighter shadow-xl shadow-primary/20 flex items-center justify-center gap-3 hover:-translate-y-1 transition-transform">
+            <button onClick={() => navigate('/dashboard', { state: { view: 'search' } })} className="w-full py-4 bg-primary text-white rounded-2xl font-black font-headline tracking-tighter shadow-xl shadow-primary/20 flex items-center justify-center gap-3 hover:-translate-y-1 transition-transform">
               <span className="material-symbols-outlined text-sm">confirmation_number</span>
               COMPRAR TICKET
             </button>

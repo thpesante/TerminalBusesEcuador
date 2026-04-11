@@ -83,6 +83,13 @@ const HubView: React.FC<HubViewProps> = ({ setView }) => {
   const navigate = useNavigate();
   const [selectedCity, setSelectedCity] = useState<keyof typeof TERMINAL_DATA>('quito');
   const [selectedDestination, setSelectedDestination] = useState<any>(null);
+  const scrollRef = React.useRef<HTMLDivElement>(null);
+
+  const scroll = (dir: 'left' | 'right') => {
+    if (scrollRef.current) {
+      scrollRef.current.scrollBy({ left: dir === 'right' ? 400 : -400, behavior: 'smooth' });
+    }
+  };
 
   const cityData = TERMINAL_DATA[selectedCity];
 
@@ -159,7 +166,7 @@ const HubView: React.FC<HubViewProps> = ({ setView }) => {
                         </div>
                     ))}
                 </div>
-                <button className="w-full mt-6 py-4 bg-slate-50 text-slate-400 font-bold text-[10px] rounded-2xl uppercase tracking-[0.2em] hover:bg-slate-100 transition-colors">Ver Calendario Completo</button>
+                <button onClick={() => alert('Calendario de eventos próximamente')} className="w-full mt-6 py-4 bg-slate-50 text-slate-400 font-bold text-[10px] rounded-2xl uppercase tracking-[0.2em] hover:bg-slate-100 transition-colors">Ver Calendario Completo</button>
             </div>
             
             <div className="bg-primary text-white p-6 rounded-[2.5rem] shadow-xl relative overflow-hidden">
@@ -184,16 +191,16 @@ const HubView: React.FC<HubViewProps> = ({ setView }) => {
                <p className="text-slate-400 font-extrabold text-[10px] uppercase tracking-widest mt-1">Sugerencias turísticas según tu origen</p>
             </div>
             <div className="hidden md:flex gap-2">
-                <button className="w-10 h-10 rounded-full bg-white shadow-md flex items-center justify-center text-primary hover:bg-primary hover:text-white transition-all">
+                <button onClick={() => scroll('left')} className="w-10 h-10 rounded-full bg-white shadow-md flex items-center justify-center text-primary hover:bg-primary hover:text-white transition-all">
                     <span className="material-symbols-outlined text-sm">arrow_back</span>
                 </button>
-                <button className="w-10 h-10 rounded-full bg-white shadow-md flex items-center justify-center text-primary hover:bg-primary hover:text-white transition-all">
+                <button onClick={() => scroll('right')} className="w-10 h-10 rounded-full bg-white shadow-md flex items-center justify-center text-primary hover:bg-primary hover:text-white transition-all">
                     <span className="material-symbols-outlined text-sm">arrow_forward</span>
                 </button>
             </div>
         </div>
 
-        <div className="flex gap-6 overflow-x-auto pb-8 no-scrollbar scroll-smooth px-2">
+        <div ref={scrollRef} className="flex gap-6 overflow-x-auto pb-8 no-scrollbar scroll-smooth px-2">
            {cityData.destinations.map((dest) => (
              <div 
                key={dest.id} 
@@ -293,7 +300,8 @@ const HubView: React.FC<HubViewProps> = ({ setView }) => {
                             {selectedDestination.details}
                         </p>
                         <div className="mt-8 flex gap-4">
-                            <button className="flex-1 bg-primary text-white py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-xl shadow-primary/20">Ver Ruta en Mapa</button>
+                            <button onClick={() => { navigate('/terminal-map'); setSelectedDestination(null); }} className="flex-1 bg-primary text-white py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-xl shadow-primary/20">Ver Ruta en Mapa</button>
+                            <button onClick={() => setView('search')} className="flex-1 bg-secondary text-white py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-xl">Buscar Horarios</button>
                         </div>
                     </div>
 

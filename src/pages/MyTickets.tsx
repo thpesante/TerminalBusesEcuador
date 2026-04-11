@@ -1,13 +1,48 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { auth, db } from '../firebase';
+import { onAuthStateChanged } from 'firebase/auth';
+import { collection, query, where, getDocs } from 'firebase/firestore';
 
 const MyTickets: React.FC = () => {
   const navigate = useNavigate();
+  const [userInitial, setUserInitial] = useState('U');
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    const unsub = onAuthStateChanged(auth, async (user) => {
+      if (!user) { navigate('/'); return; }
+      setUserInitial((user.displayName || user.email || 'U').charAt(0).toUpperCase());
+      setIsLoading(false);
+    });
+    return () => unsub();
+  }, [navigate]);
 
   const tickets = [
     { id: 'TKT-12904', coop: 'Cooperativa Loja', from: 'Cuenca', to: 'Quito', date: '24 Oct 2026', time: '10:30 PM', seat: '12', price: '$15.25', status: 'active' },
     { id: 'TKT-11855', coop: 'Turismo Oriental', from: 'Cuenca', to: 'Guayaquil', date: '15 Oct 2026', time: '08:00 AM', seat: '04', price: '$8.25', status: 'expirado' }
   ];
+
+  const handleDownloadPDF = (ticket: typeof tickets[0]) => {
+    const content = `BOLETO DIGITAL - ${ticket.id}\n${ticket.coop}\nRuta: ${ticket.from} → ${ticket.to}\nFecha: ${ticket.date} ${ticket.time}\nAsiento: ${ticket.seat}\nTotal: ${ticket.price}`;
+    const blob = new Blob([content], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = `${ticket.id}.txt`; a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const handleShare = async (ticket: typeof tickets[0]) => {
+    const text = `Mi viaje: ${ticket.from} → ${ticket.to} el ${ticket.date} a las ${ticket.time}. Asiento ${ticket.seat}. Reservado con TransporteEcuador.`;
+    if (navigator.share) {
+      await navigator.share({ title: `Boleto ${ticket.id}`, text });
+    } else {
+      await navigator.clipboard.writeText(text);
+      alert('Información del boleto copiada al portapapeles');
+    }
+  };
+
+  if (isLoading) return <div className="flex justify-center items-center h-screen"><div className="animate-spin rounded-full h-12 w-12 border-t-2 border-primary"></div></div>;
 
   return (
     <div className="min-h-screen bg-surface font-body text-on-surface antialiased pt-24 pb-32">
@@ -23,7 +58,7 @@ const MyTickets: React.FC = () => {
           <span className="text-xl font-extrabold tracking-tighter text-primary font-headline">Mis Boletos</span>
         </div>
         <div className="flex items-center gap-6">
-          <div className="w-10 h-10 rounded-full bg-primary-fixed flex items-center justify-center text-on-primary-fixed font-bold border-2 border-white">U</div>
+          <div className="w-10 h-10 rounded-full bg-primary-fixed flex items-center justify-center text-on-primary-fixed font-bold border-2 border-white">{userInitial}</div>
         </div>
       </header>
 
@@ -75,11 +110,19 @@ const MyTickets: React.FC = () => {
                         </div>
 
                         <div className="mt-8 flex gap-4">
-                            <button className="flex-1 py-4 bg-primary text-white rounded-2xl font-black text-[9px] uppercase tracking-widest shadow-xl shadow-primary/20 hover:-translate-y-1 transition-all">
-                                Descargar PDF
+                            <button
+                              onClick={() => handleDownloadPDF(t)}
+                              className="flex-1 py-4 bg-primary text-white rounded-2xl font-black text-[9px] uppercase tracking-widest shadow-xl shadow-primary/20 hover:-translate-y-1 transition-all flex items-center justify-center gap-2"
+                            >
+                              <span className="material-symbols-outlined text-sm">download</span>
+                              Descargar
                             </button>
-                            <button className="flex-1 py-4 bg-white text-slate-400 border border-slate-100 rounded-2xl font-black text-[9px] uppercase tracking-widest hover:bg-slate-50 transition-all">
-                                Compartir
+                            <button
+                              onClick={() => handleShare(t)}
+                              className="flex-1 py-4 bg-white text-slate-400 border border-slate-100 rounded-2xl font-black text-[9px] uppercase tracking-widest hover:bg-slate-50 transition-all flex items-center justify-center gap-2"
+                            >
+                              <span className="material-symbols-outlined text-sm">share</span>
+                              Compartir
                             </button>
                         </div>
                     </div>
@@ -91,7 +134,12 @@ const MyTickets: React.FC = () => {
              <div className="absolute top-0 right-0 w-64 h-64 bg-white/5 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2"></div>
              <h3 className="text-white text-3xl font-black font-headline tracking-tighter mb-4 italic">¿Necesitas ayuda con tu viaje?</h3>
              <p className="text-white/60 font-medium text-sm mb-10 max-w-sm mx-auto">Nuestro equipo de soporte está disponible 24/7 para resolver cualquier inconveniente con tus boletos.</p>
-             <button className="bg-secondary text-white px-10 py-5 rounded-2xl font-black text-[10px] uppercase tracking-[0.2em] shadow-xl hover:-translate-y-1 transition-all">Contactar Soporte</button>
+              <button
+                onClick={() => window.open('mailto:soporte@transporteecuador.ec?subject=Ayuda con mi boleto')}
+                className="bg-secondary text-white px-10 py-5 rounded-2xl font-black text-[10px] uppercase tracking-[0.2em] shadow-xl hover:-translate-y-1 transition-all"
+              >
+                Contactar Soporte
+              </button>
         </div>
       </main>
 

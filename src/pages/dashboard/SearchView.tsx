@@ -58,7 +58,7 @@ const SearchView: React.FC<SearchViewProps> = ({ setView }) => {
             <div className="relative z-10">
               <h4 className="font-headline font-bold text-xl mb-2">¿Necesitas ayuda?</h4>
               <p className="text-sm opacity-80 mb-4 font-body">Nuestro soporte técnico está disponible 24/7 para tu viaje.</p>
-              <button className="w-full bg-secondary-container text-on-secondary-container font-bold py-3 rounded-xl text-sm transition-transform active:scale-95 font-headline">Contactar Soporte</button>
+              <button onClick={() => window.open('mailto:soporte@transporteecuador.ec')} className="w-full bg-secondary-container text-on-secondary-container font-bold py-3 rounded-xl text-sm transition-transform active:scale-95 font-headline">Contactar Soporte</button>
             </div>
             <div className="absolute -right-4 -bottom-4 opacity-10">
               <span className="material-symbols-outlined text-8xl">support_agent</span>

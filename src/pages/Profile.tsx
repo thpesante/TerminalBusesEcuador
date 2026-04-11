@@ -1,14 +1,16 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { auth, db } from '../firebase';
-import { onAuthStateChanged, signOut, deleteUser } from 'firebase/auth';
+import { onAuthStateChanged, signOut, deleteUser, sendPasswordResetEmail } from 'firebase/auth';
 import { doc, getDoc, updateDoc, deleteDoc } from 'firebase/firestore';
 
 const Profile = () => {
   const [userData, setUserData] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
-  const [activeTab, setActiveTab] = useState('personal'); // personal, seguridad, notificaciones
+  const [activeTab, setActiveTab] = useState('personal');
+  const [successMsg, setSuccessMsg] = useState('');
+  const [notifState, setNotifState] = useState({ alertas: true, promociones: false, seguridad: true });
   
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
@@ -38,20 +40,26 @@ const Profile = () => {
   const handleUpdate = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!auth.currentUser) return;
-    
     setIsSaving(true);
     try {
       await updateDoc(doc(db, 'users', auth.currentUser.uid), {
-        nombre: name,
-        celular: phone,
-        canton: address
+        nombre: name, celular: phone, canton: address
       });
-      alert("Información actualizada");
+      setSuccessMsg('¡Información actualizada correctamente!');
+      setTimeout(() => setSuccessMsg(''), 3000);
     } catch (e) {
-      console.error(e);
-      alert("Error al actualizar");
-    } finally {
-      setIsSaving(false);
+      console.error(e); alert('Error al actualizar');
+    } finally { setIsSaving(false); }
+  };
+
+  const handleChangePassword = async () => {
+    if (!auth.currentUser?.email) return;
+    try {
+      await sendPasswordResetEmail(auth, auth.currentUser.email);
+      setSuccessMsg('Correo de restablecimiento enviado. Revisa tu bandeja.');
+      setTimeout(() => setSuccessMsg(''), 5000);
+    } catch (e: any) {
+      alert('Error: ' + e.message);
     }
   };
 
@@ -172,6 +180,12 @@ const Profile = () => {
                     />
                   </div>
 
+                  {successMsg && (
+                    <div className="md:col-span-2 p-4 bg-emerald-50 text-emerald-700 rounded-2xl text-sm font-bold border border-emerald-100 flex items-center gap-2">
+                      <span className="material-symbols-outlined text-sm">check_circle</span>
+                      {successMsg}
+                    </div>
+                  )}
                   <div className="md:col-span-2 pt-8">
                     <button 
                       type="submit"
@@ -193,16 +207,16 @@ const Profile = () => {
                 </div>
                 
                 <div className="space-y-4">
-                  <div className="flex items-center justify-between p-6 bg-slate-50 rounded-2xl">
-                    <div className="flex gap-4">
-                      <span className="material-symbols-outlined text-primary">lock_reset</span>
-                      <div>
-                        <h4 className="font-bold">Contraseña</h4>
-                        <p className="text-xs text-slate-400 font-medium">Cambia tu clave de acceso</p>
+                    <div className="flex items-center justify-between p-6 bg-slate-50 rounded-2xl">
+                      <div className="flex gap-4">
+                        <span className="material-symbols-outlined text-primary">lock_reset</span>
+                        <div>
+                          <h4 className="font-bold">Contraseña</h4>
+                          <p className="text-xs text-slate-400 font-medium">Cambia tu clave de acceso</p>
+                        </div>
                       </div>
+                      <button onClick={handleChangePassword} className="text-primary font-bold text-sm hover:underline uppercase tracking-widest">Cambiar</button>
                     </div>
-                    <button className="text-primary font-bold text-sm hover:underline uppercase tracking-widest">Cambiar</button>
-                  </div>
                   <div className="flex items-center justify-between p-6 bg-slate-50 rounded-2xl">
                     <div className="flex gap-4">
                       <span className="material-symbols-outlined text-primary">devices</span>
@@ -232,19 +246,22 @@ const Profile = () => {
               <div className="animate-fade-in space-y-8">
                 <h2 className="text-3xl font-black text-primary font-headline mb-8">Notificaciones</h2>
                 <div className="space-y-6">
-                  {[
-                    { label: 'Alertas de Viaje', desc: 'Recibe avisos sobre la llegada de tu bus.', default: true },
-                    { label: 'Promociones', desc: 'Descuentos exclusivos y ofertas de temporada.', default: false },
-                    { label: 'Seguridad', desc: 'Alertas de inicio de sesión y cambios de cuenta.', default: true }
-                  ].map((item, i) => (
-                    <div key={i} className="flex items-center justify-between">
+                  {([
+                    { key: 'alertas', label: 'Alertas de Viaje', desc: 'Recibe avisos sobre la llegada de tu bus.' },
+                    { key: 'promociones', label: 'Promociones', desc: 'Descuentos exclusivos y ofertas de temporada.' },
+                    { key: 'seguridad', label: 'Seguridad', desc: 'Alertas de inicio de sesión y cambios de cuenta.' }
+                  ] as { key: keyof typeof notifState; label: string; desc: string }[]).map((item) => (
+                    <div key={item.key} className="flex items-center justify-between">
                       <div>
                         <h4 className="font-bold text-primary">{item.label}</h4>
                         <p className="text-xs text-slate-400 font-medium">{item.desc}</p>
                       </div>
-                      <div className={`w-12 h-6 rounded-full relative cursor-pointer transition-colors ${item.default ? 'bg-primary' : 'bg-slate-200'}`}>
-                        <div className={`absolute top-1 w-4 h-4 rounded-full bg-white transition-all ${item.default ? 'right-1' : 'left-1'}`}></div>
-                      </div>
+                      <button
+                        onClick={() => setNotifState(prev => ({ ...prev, [item.key]: !prev[item.key] }))}
+                        className={`w-12 h-6 rounded-full relative transition-colors duration-300 ${notifState[item.key] ? 'bg-primary' : 'bg-slate-200'}`}
+                      >
+                        <div className={`absolute top-1 w-4 h-4 rounded-full bg-white transition-all duration-300 shadow ${notifState[item.key] ? 'right-1' : 'left-1'}`}></div>
+                      </button>
                     </div>
                   ))}
                 </div>

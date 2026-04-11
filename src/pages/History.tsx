@@ -5,15 +5,15 @@ import { onAuthStateChanged } from 'firebase/auth';
 
 const History = () => {
   const [isLoading, setIsLoading] = useState(true);
-  const [showPDF, setShowPDF] = useState(false);
   const navigate = useNavigate();
 
-  const handleViewPDF = () => {
-    setShowPDF(true);
-    setTimeout(() => {
-      setShowPDF(false);
-      alert("Descargando comprobante de viaje...");
-    }, 2000);
+  const handleViewPDF = (trip: { from: string; to: string; date: string; time: string; unit: string; coop: string }) => {
+    const content = `COMPROBANTE DE VIAJE\nRuta: ${trip.from} → ${trip.to}\nFecha: ${trip.date} a las ${trip.time}\n${trip.unit} • ${trip.coop}\nEmitido por TransporteEcuador`;
+    const blob = new Blob([content], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = `comprobante_${trip.from}_${trip.to}.txt`; a.click();
+    URL.revokeObjectURL(url);
   };
 
   useEffect(() => {
@@ -71,7 +71,7 @@ const History = () => {
             <div className="flex flex-col items-end gap-2 w-full md:w-auto">
               <span className="px-3 py-1 bg-emerald-100 text-emerald-700 rounded-full text-[10px] font-bold uppercase tracking-widest">Completado</span>
               <div className="flex gap-2">
-                <button onClick={handleViewPDF} className="px-4 py-2 bg-surface-container-high text-primary font-bold text-xs rounded-lg hover:bg-surface-container-highest transition-colors">Ver PDF</button>
+                <button onClick={() => handleViewPDF({ from: 'Cuenca', to: 'Quito', date: '12 Abril 2024', time: '08:30 AM', unit: 'Unidad 104', coop: 'Cooperativa Loja' })} className="px-4 py-2 bg-surface-container-high text-primary font-bold text-xs rounded-lg hover:bg-surface-container-highest transition-colors">Ver PDF</button>
                 <button onClick={() => navigate('/dashboard', { state: { view: 'search' } })} className="px-4 py-2 bg-primary text-white font-bold text-xs rounded-lg hover:bg-primary-container transition-colors">Comprar de Nuevo</button>
               </div>
             </div>
@@ -94,7 +94,7 @@ const History = () => {
             <div className="flex flex-col items-end gap-2 w-full md:w-auto">
               <span className="px-3 py-1 bg-emerald-100 text-emerald-700 rounded-full text-[10px] font-bold uppercase tracking-widest">Completado</span>
               <div className="flex gap-2">
-                <button onClick={handleViewPDF} className="px-4 py-2 bg-surface-container-high text-primary font-bold text-xs rounded-lg hover:bg-surface-container-highest transition-colors">Ver PDF</button>
+                <button onClick={() => handleViewPDF({ from: 'Cuenca', to: 'Guayaquil', date: '05 Abril 2024', time: '14:15 PM', unit: 'Unidad 22', coop: 'Transportes Azuay' })} className="px-4 py-2 bg-surface-container-high text-primary font-bold text-xs rounded-lg hover:bg-surface-container-highest transition-colors">Ver PDF</button>
                 <button onClick={() => navigate('/dashboard', { state: { view: 'search' } })} className="px-4 py-2 bg-primary text-white font-bold text-xs rounded-lg hover:bg-primary-container transition-colors">Comprar de Nuevo</button>
               </div>
             </div>
