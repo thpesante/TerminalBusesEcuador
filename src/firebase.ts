@@ -4,14 +4,14 @@ import { getAuth } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
 
 const firebaseConfig = {
-  apiKey: "AIzaSyAzFzD0wskerpaRhObuRTKlJbEQ8rz3fk0",
-  authDomain: "movu-5b601.firebaseapp.com",
-  databaseURL: "https://movu-5b601-default-rtdb.firebaseio.com",
-  projectId: "movu-5b601",
-  storageBucket: "movu-5b601.firebasestorage.app",
-  messagingSenderId: "493011884279",
-  appId: "1:493011884279:web:97e4c757697460ca7ddbf2",
-  measurementId: "G-SVFMWK0Z3J"
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
+  databaseURL: import.meta.env.VITE_FIREBASE_DATABASE_URL,
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+  appId: import.meta.env.VITE_FIREBASE_APP_ID,
+  measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID,
 };
 
 const app = initializeApp(firebaseConfig);
