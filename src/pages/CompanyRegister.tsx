@@ -6,7 +6,7 @@ import { doc, setDoc } from 'firebase/firestore';
 
 const CompanyRegister: React.FC = () => {
     const navigate = useNavigate();
-    
+
     // State for inputs
     const [ruc, setRuc] = useState('');
     const [companyName, setCompanyName] = useState('');
@@ -37,11 +37,11 @@ const CompanyRegister: React.FC = () => {
         try {
             const proxyUrl = 'https://infoplacas.herokuapp.com/';
             const targetUrl = `https://aggregator.cipherbyte.ec/company/${ruc}`;
-            
+
             const response = await fetch(proxyUrl + targetUrl);
             if (!response.ok) throw new Error('RUC no encontrado o error en el servidor');
             const data = await response.json();
-            
+
             if (data && data.razonSocial) {
                 setCompanyName(data.razonSocial);
                 setIsRucVerified(true);
@@ -62,7 +62,7 @@ const CompanyRegister: React.FC = () => {
             try {
                 const proxyUrl = 'https://infoplacas.herokuapp.com/';
                 const targetUrl = 'https://si.secap.gob.ec/sisecap/logeo_web/json/busca_persona_registro_civil.php';
-                
+
                 const postData = {
                     documento: cedula,
                     tipo: '1'
@@ -101,14 +101,14 @@ const CompanyRegister: React.FC = () => {
             setError('Las contraseñas no coinciden');
             return;
         }
-        
+
         setLoadingRegister(true);
         setError('');
-        
+
         try {
             const userCredential = await createUserWithEmailAndPassword(auth, email, password);
             const user = userCredential.user;
-            
+
             await setDoc(doc(db, 'users', user.uid), {
                 ruc_empresa: ruc,
                 nombre_cooperativa: companyName,
@@ -117,10 +117,10 @@ const CompanyRegister: React.FC = () => {
                 fecha_nacimiento: fechaNacimiento,
                 correo: email,
                 telefono: telefono,
-                rol: 'Driver',
+                rol: 'BUS',
                 createdAt: new Date().toISOString()
             });
-            
+
             navigate('/unit-registration');
         } catch (err: any) {
             setError(err.message || 'Error al crear la cuenta');
@@ -129,13 +129,13 @@ const CompanyRegister: React.FC = () => {
         }
     };
 
-    const isFormComplete = 
-        isRucVerified && 
-        isIdVerified && 
-        email && 
-        telefono && 
-        password && 
-        confirmPassword && 
+    const isFormComplete =
+        isRucVerified &&
+        isIdVerified &&
+        email &&
+        telefono &&
+        password &&
+        confirmPassword &&
         password === confirmPassword;
 
     return (
@@ -145,9 +145,9 @@ const CompanyRegister: React.FC = () => {
                 {/* Branding & Context Column */}
                 <section className="lg:col-span-5 relative hidden lg:flex flex-col justify-between p-12 text-white overflow-hidden">
                     <div className="absolute inset-0 z-0">
-                        <img 
-                            alt="Bus moderno en Ecuador" 
-                            className="w-full h-full object-cover" 
+                        <img
+                            alt="Bus moderno en Ecuador"
+                            className="w-full h-full object-cover"
                             src="https://lh3.googleusercontent.com/aida-public/AB6AXuDxQPML4jDbVY5pRk_xr8MearntmqgkQBa0I-TP5JfCYj_kcW6gE8GPpnbpBhM7QRjmkm6jt9don4DhfuVSZw4-GcNc1xh_uEDlnaG71ZfI9Vm6Ylb4fHa72Phsd7nSIeSwP1odrbvsZdS0wJEcHam2Pa04KDXXlO0KMY396DldsrSjhtTKpxPa2otIDAUJ5sIZI-pK0_AdKe8ftQRQvU2UIJ_L9Tp8OwnkD-2rSBoN5iThHJWPIhX9DlCJAO_3SJLpphy7YaFVkHLN"
                         />
                         <div className="absolute inset-0 bg-[#001453]/80 mix-blend-multiply"></div>
@@ -184,7 +184,7 @@ const CompanyRegister: React.FC = () => {
                         <h2 className="text-3xl font-extrabold text-on-surface tracking-tight mb-2 font-headline">Crear Cuenta de Operaciones</h2>
                         <p className="text-on-surface-variant font-body">Complete el formulario para registrar su cooperativa y administrador.</p>
                     </header>
-                    
+
                     {error && (
                         <div className="p-4 mb-6 bg-error-container border border-error/20 rounded-xl text-on-error-container text-sm font-bold flex items-center gap-2">
                             <span className="material-symbols-outlined text-error">error</span>
@@ -203,10 +203,10 @@ const CompanyRegister: React.FC = () => {
                                 <div className="relative group">
                                     <label className="block text-xs font-semibold text-on-surface-variant mb-2 ml-1" htmlFor="ruc">RUC DE LA EMPRESA</label>
                                     <div className="flex items-center gap-2">
-                                        <input 
-                                            className="w-full bg-surface-container-low border-none border-b-2 border-transparent focus:border-surface-tint focus:ring-0 text-sm py-3 px-4 transition-all" 
-                                            id="ruc" 
-                                            placeholder="179XXXXXXX001" 
+                                        <input
+                                            className="w-full bg-surface-container-low border-none border-b-2 border-transparent focus:border-surface-tint focus:ring-0 text-sm py-3 px-4 transition-all"
+                                            id="ruc"
+                                            placeholder="179XXXXXXX001"
                                             type="text"
                                             value={ruc}
                                             onChange={(e) => {
@@ -221,8 +221,8 @@ const CompanyRegister: React.FC = () => {
                                             }}
                                         />
                                         {!isRucVerified && (
-                                            <button 
-                                                className="bg-surface-container-highest hover:bg-surface-container-high text-primary font-bold px-4 py-3 rounded text-xs transition-all active:scale-95 flex items-center gap-2" 
+                                            <button
+                                                className="bg-surface-container-highest hover:bg-surface-container-high text-primary font-bold px-4 py-3 rounded text-xs transition-all active:scale-95 flex items-center gap-2"
                                                 type="button"
                                                 onClick={handleVerifyRuc}
                                                 disabled={loadingRuc}
@@ -236,11 +236,11 @@ const CompanyRegister: React.FC = () => {
                                 </div>
                                 <div>
                                     <label className="block text-xs font-semibold text-on-surface-variant mb-2 ml-1" htmlFor="nombre_cooperativa">NOMBRE DE LA COOPERATIVA</label>
-                                    <textarea 
-                                        className="w-full bg-surface-container-highest/50 border-none text-on-surface-variant text-sm py-3 px-4 cursor-not-allowed italic resize-none min-h-[60px]" 
-                                        id="nombre_cooperativa" 
-                                        placeholder="Nombre se cargará al verificar RUC" 
-                                        readOnly 
+                                    <textarea
+                                        className="w-full bg-surface-container-highest/50 border-none text-on-surface-variant text-sm py-3 px-4 cursor-not-allowed italic resize-none min-h-[60px]"
+                                        id="nombre_cooperativa"
+                                        placeholder="Nombre se cargará al verificar RUC"
+                                        readOnly
                                         value={companyName}
                                     />
                                 </div>
@@ -257,10 +257,10 @@ const CompanyRegister: React.FC = () => {
                                 <div className="md:col-span-2">
                                     <label className="block text-xs font-semibold text-on-surface-variant mb-2 ml-1" htmlFor="cedula">CÉDULA DE IDENTIDAD</label>
                                     <div className="flex items-center gap-2">
-                                        <input 
-                                            className="w-full bg-surface-container-low border-none border-b-2 border-transparent focus:border-surface-tint focus:ring-0 text-sm py-3 px-4" 
-                                            id="cedula" 
-                                            placeholder="17XXXXXXXX" 
+                                        <input
+                                            className="w-full bg-surface-container-low border-none border-b-2 border-transparent focus:border-surface-tint focus:ring-0 text-sm py-3 px-4"
+                                            id="cedula"
+                                            placeholder="17XXXXXXXX"
                                             type="text"
                                             maxLength={10}
                                             value={cedula}
@@ -278,7 +278,7 @@ const CompanyRegister: React.FC = () => {
                                             <div className="animate-spin rounded-full h-4 w-4 border-2 border-primary border-t-transparent mx-2"></div>
                                         ) : (
                                             !isIdVerified ? (
-                                                <button 
+                                                <button
                                                     type="button"
                                                     onClick={handleIdBlur}
                                                     className="bg-surface-container-highest hover:bg-surface-container-high text-primary font-bold px-4 py-3 rounded text-xs transition-all active:scale-95"
@@ -291,28 +291,28 @@ const CompanyRegister: React.FC = () => {
                                         )}
                                     </div>
                                 </div>
-                                
+
                                 <div className={`grid grid-cols-1 md:grid-cols-2 gap-6 md:col-span-2 transition-all duration-300 ${isIdVerified ? 'opacity-100' : 'opacity-40 pointer-events-none'}`}>
                                     <div>
                                         <label className="block text-xs font-semibold text-on-surface-variant mb-2 ml-1" htmlFor="nombres">NOMBRES</label>
-                                        <input className="w-full bg-surface-container-highest/50 border-none text-sm py-3 px-4 cursor-not-allowed italic text-on-surface-variant" id="nombres" value={nombres} readOnly type="text"/>
+                                        <input className="w-full bg-surface-container-highest/50 border-none text-sm py-3 px-4 cursor-not-allowed italic text-on-surface-variant" id="nombres" value={nombres} readOnly type="text" />
                                     </div>
                                     <div>
                                         <label className="block text-xs font-semibold text-on-surface-variant mb-2 ml-1" htmlFor="apellidos">APELLIDOS</label>
-                                        <input className="w-full bg-surface-container-highest/50 border-none text-sm py-3 px-4 cursor-not-allowed italic text-on-surface-variant" id="apellidos" value={apellidos} readOnly type="text"/>
+                                        <input className="w-full bg-surface-container-highest/50 border-none text-sm py-3 px-4 cursor-not-allowed italic text-on-surface-variant" id="apellidos" value={apellidos} readOnly type="text" />
                                     </div>
-                                    
+
                                     <div className="md:col-span-2">
                                         <label className="block text-xs font-semibold text-on-surface-variant mb-2 ml-1" htmlFor="fecha_nacimiento">FECHA DE NACIMIENTO</label>
-                                        <input className="w-full bg-surface-container-highest/50 border-none text-sm py-3 px-4 cursor-not-allowed italic text-on-surface-variant" id="fecha_nacimiento" value={fechaNacimiento} readOnly type="text"/>
+                                        <input className="w-full bg-surface-container-highest/50 border-none text-sm py-3 px-4 cursor-not-allowed italic text-on-surface-variant" id="fecha_nacimiento" value={fechaNacimiento} readOnly type="text" />
                                     </div>
-                                    
+
                                     <div className="md:col-span-1">
                                         <label className="block text-xs font-semibold text-on-surface-variant mb-2 ml-1" htmlFor="email">CORREO ELECTRÓNICO</label>
-                                        <input 
-                                            className="w-full bg-surface-container-low border-none border-b-2 border-transparent focus:border-surface-tint focus:ring-0 text-sm py-3 px-4" 
-                                            id="email" 
-                                            placeholder="admin@cooperativa.com" 
+                                        <input
+                                            className="w-full bg-surface-container-low border-none border-b-2 border-transparent focus:border-surface-tint focus:ring-0 text-sm py-3 px-4"
+                                            id="email"
+                                            placeholder="admin@cooperativa.com"
                                             type="email"
                                             value={email}
                                             onChange={(e) => setEmail(e.target.value)}
@@ -321,10 +321,10 @@ const CompanyRegister: React.FC = () => {
                                     </div>
                                     <div>
                                         <label className="block text-xs font-semibold text-on-surface-variant mb-2 ml-1" htmlFor="telefono">TELÉFONO DE CONTACTO</label>
-                                        <input 
-                                            className="w-full bg-surface-container-low border-none border-b-2 border-transparent focus:border-surface-tint focus:ring-0 text-sm py-3 px-4" 
-                                            id="telefono" 
-                                            placeholder="09XXXXXXXX" 
+                                        <input
+                                            className="w-full bg-surface-container-low border-none border-b-2 border-transparent focus:border-surface-tint focus:ring-0 text-sm py-3 px-4"
+                                            id="telefono"
+                                            placeholder="09XXXXXXXX"
                                             type="tel"
                                             value={telefono}
                                             onChange={(e) => setTelefono(e.target.value)}
@@ -333,10 +333,10 @@ const CompanyRegister: React.FC = () => {
                                     </div>
                                     <div>
                                         <label className="block text-xs font-semibold text-on-surface-variant mb-2 ml-1" htmlFor="password">CONTRASEÑA</label>
-                                        <input 
-                                            className="w-full bg-surface-container-low border-none border-b-2 border-transparent focus:border-surface-tint focus:ring-0 text-sm py-3 px-4" 
-                                            id="password" 
-                                            placeholder="••••••••" 
+                                        <input
+                                            className="w-full bg-surface-container-low border-none border-b-2 border-transparent focus:border-surface-tint focus:ring-0 text-sm py-3 px-4"
+                                            id="password"
+                                            placeholder="••••••••"
                                             type="password"
                                             value={password}
                                             onChange={(e) => setPassword(e.target.value)}
@@ -345,10 +345,10 @@ const CompanyRegister: React.FC = () => {
                                     </div>
                                     <div>
                                         <label className="block text-xs font-semibold text-on-surface-variant mb-2 ml-1" htmlFor="confirm_password">CONFIRMAR CONTRASEÑA</label>
-                                        <input 
-                                            className="w-full bg-surface-container-low border-none border-b-2 border-transparent focus:border-surface-tint focus:ring-0 text-sm py-3 px-4" 
-                                            id="confirm_password" 
-                                            placeholder="••••••••" 
+                                        <input
+                                            className="w-full bg-surface-container-low border-none border-b-2 border-transparent focus:border-surface-tint focus:ring-0 text-sm py-3 px-4"
+                                            id="confirm_password"
+                                            placeholder="••••••••"
                                             type="password"
                                             value={confirmPassword}
                                             onChange={(e) => setConfirmPassword(e.target.value)}
@@ -361,8 +361,8 @@ const CompanyRegister: React.FC = () => {
 
                         {/* Actions */}
                         <div className="pt-6 space-y-6">
-                            <button 
-                                className={`w-full bg-gradient-to-r from-[#3755c3] to-[#607cec] text-white font-bold py-4 rounded shadow-lg transition-all active:scale-[0.98] flex items-center justify-center gap-3 ${!isFormComplete || loadingRegister ? 'opacity-50 cursor-not-allowed' : 'hover:shadow-xl hover:opacity-90'}`} 
+                            <button
+                                className={`w-full bg-gradient-to-r from-[#3755c3] to-[#607cec] text-white font-bold py-4 rounded shadow-lg transition-all active:scale-[0.98] flex items-center justify-center gap-3 ${!isFormComplete || loadingRegister ? 'opacity-50 cursor-not-allowed' : 'hover:shadow-xl hover:opacity-90'}`}
                                 type="submit"
                                 disabled={!isFormComplete || loadingRegister}
                             >

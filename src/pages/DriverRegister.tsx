@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { auth, db } from '../firebase';
+import { auth, db, isDemoMode } from '../firebase';
 import { createUserWithEmailAndPassword } from 'firebase/auth';
 import { doc, setDoc } from 'firebase/firestore';
 
@@ -42,6 +42,13 @@ const DriverRegister: React.FC = () => {
     setLoading(true);
     setError('');
     
+    if (isDemoMode) {
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      navigate('/driver-dashboard');
+      setLoading(false);
+      return;
+    }
+
     try {
       const userCredential = await createUserWithEmailAndPassword(auth, formData.email, formData.password);
       const user = userCredential.user;
@@ -115,15 +122,27 @@ const DriverRegister: React.FC = () => {
 
                     <div className="flex flex-col gap-2">
                       <label className="text-[10px] font-bold uppercase tracking-widest text-slate-400 ml-1 font-label">RUC de la Empresa</label>
-                      <input 
-                        name="ruc"
-                        value={formData.ruc}
-                        onChange={handleInputChange}
-                        className="w-full bg-surface-container-low border-none rounded-2xl py-4 px-6 focus:ring-2 focus:ring-primary/20 font-semibold" 
-                        placeholder="RUC de 13 dígitos"
-                        maxLength={13}
-                        required
-                      />
+                      <div className="relative group">
+                        <input 
+                          name="ruc"
+                          value={formData.ruc}
+                          onChange={handleInputChange}
+                          onBlur={async () => {
+                            if (formData.ruc === '0106797970' && isDemoMode) {
+                              setFormData(prev => ({ ...prev, cooperativa: 'Loja' }));
+                            }
+                          }}
+                          className="w-full bg-surface-container-low border-none rounded-2xl py-4 px-6 focus:ring-2 focus:ring-primary/20 font-semibold" 
+                          placeholder="RUC de 13 dígitos"
+                          maxLength={13}
+                          required
+                        />
+                        {isDemoMode && formData.ruc === '0106797970' && (
+                          <div className="absolute right-4 top-1/2 -translate-y-1/2 bg-emerald-500 text-white p-1 rounded-full">
+                            <span className="material-symbols-outlined text-xs">check</span>
+                          </div>
+                        )}
+                      </div>
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

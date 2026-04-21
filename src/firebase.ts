@@ -1,7 +1,7 @@
 import { initializeApp } from "firebase/app";
 import { getAnalytics } from "firebase/analytics";
 import { getAuth } from "firebase/auth";
-import { getFirestore } from "firebase/firestore";
+import { getFirestore, enableMultiTabIndexedDbPersistence } from "firebase/firestore";
 
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
@@ -14,7 +14,19 @@ const firebaseConfig = {
   measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID,
 };
 
+// Check if we are in demo mode (using dummy keys)
+export const isDemoMode = import.meta.env.VITE_FIREBASE_API_KEY === 'dummy-key';
+
 const app = initializeApp(firebaseConfig);
-export const analytics = getAnalytics(app);
+export const analytics = isDemoMode ? null : getAnalytics(app);
 export const auth = getAuth(app);
 export const db = getFirestore(app);
+
+// ORDEN 1: El Cerebro Offline - Firebase Persistence
+enableMultiTabIndexedDbPersistence(db).catch((err) => {
+  if (err.code === 'failed-precondition') {
+      console.warn('Persistence failed: Multiple tabs open');
+  } else if (err.code === 'unimplemented') {
+      console.warn('Persistence not supported by the browser');
+  }
+});

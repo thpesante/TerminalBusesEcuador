@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { auth } from '../firebase';
+import { auth, db, isDemoMode } from '../firebase';
 import { signInWithEmailAndPassword } from 'firebase/auth';
+import { doc, getDoc } from 'firebase/firestore';
 
 const Login = () => {
   const navigate = useNavigate();
@@ -15,9 +16,63 @@ const Login = () => {
     setErrorMSG('');
     setIsLoading(true);
 
+    if (isDemoMode) {
+      // Demo bypass (simulated default CLIENTE role if demo mode is strictly used without Firebase)
+      await new Promise(resolve => setTimeout(resolve, 800));
+      if (email.includes('bus')) navigate('/driver-dashboard');
+      else if (email.includes('oficina') || email.includes('erp')) navigate('/erp/ticketing');
+      else if (email.includes('datos')) navigate('/datos-dashboard');
+      else navigate('/dashboard');
+      setIsLoading(false);
+      return;
+    }
+
     try {
-      await signInWithEmailAndPassword(auth, email, password);
-      navigate('/dashboard');
+      const userCredential = await signInWithEmailAndPassword(auth, email, password);
+      const user = userCredential.user;
+
+      // Verificamos el rol en Firestore
+      const userDocRef = doc(db, 'users', user.uid);
+      const userDocSnap = await getDoc(userDocRef);
+
+      if (!userDocSnap.exists()) {
+        setErrorMSG("Acceso denegado: El usuario no tiene un perfil registrado.");
+        await auth.signOut();
+        setIsLoading(false);
+        return;
+      }
+
+      const userData = userDocSnap.data();
+
+      // Validación estricta de Rol verificado
+      const userRole = userData?.role || userData?.rol; // Soportamos ambos por si acaso
+
+      if (!userRole) {
+        setErrorMSG("Acceso denegado: No cuentas con un rol verificado asignado.");
+        await auth.signOut();
+        setIsLoading(false);
+        return;
+      }
+
+      // Enrutamiento basado en el rol (RBAC)
+      switch (userRole) {
+        case 'CLIENTE':
+          navigate('/dashboard');
+          break;
+        case 'BUS':
+          navigate('/driver-dashboard');
+          break;
+        case 'OFICINA':
+          navigate('/erp/ticketing');
+          break;
+        case 'DATOS':
+          navigate('/datos-dashboard'); 
+          break;
+        default:
+          setErrorMSG(`Acceso denegado: Rol '${userRole}' no reconocido.`);
+          await auth.signOut();
+      }
+
     } catch (error: any) {
       console.error("Error de autenticación:", error);
       setErrorMSG("Credenciales incorrectas o problema de conexión.");

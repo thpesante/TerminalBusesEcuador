@@ -1,28 +1,82 @@
-import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { auth, db } from '../firebase';
-import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, addDoc, serverTimestamp, setDoc, doc, deleteDoc, getDoc } from 'firebase/firestore';
 
 const UnitConfirmation: React.FC = () => {
   const navigate = useNavigate();
+  const location = useLocation();
+  const [unitData, setUnitData] = useState<any>(location.state?.unitData || {});
+  const [grids, setGrids] = useState<any>(location.state?.grids || { superior: {}, inferior: {} });
+  const draftId = location.state?.draftId || `temp_${auth.currentUser?.uid}`;
+  
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState('');
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchData = async () => {
+        try {
+            const snap = await getDoc(doc(db, 'units_draft', draftId));
+            if (snap.exists()) {
+                const data = snap.data();
+                setUnitData(data);
+                if (data.grids) setGrids(data.grids);
+            }
+        } catch (err) { console.error("Error loading final confirmation data:", err); }
+        finally { setLoading(false); }
+    };
+    fetchData();
+  }, [draftId]);
+
+  const superiorCells = Object.values(grids.superior || {}).sort((a:any, b:any) => a.row - b.row || a.col - b.col);
+  const inferiorCells = unitData.busType === 'Dos Pisos' ? Object.values(grids.inferior || {}).sort((a:any, b:any) => a.row - b.row || a.col - b.col) : [];
+  
+  const totalAsientos = [...superiorCells, ...inferiorCells].filter((c: any) => c.type === 'seat').length;
 
   const handleConfirm = async () => {
     setIsSaving(true);
     setError('');
     try {
-      await addDoc(collection(db, 'units'), {
-        cooperativa: 'Alpha Trans-Continental S.A.',
-        modelo: 'AeroCoach X-200',
-        chasis: 'VN-99201-9X',
-        configuracion: 'EJECUTIVO-48',
-        despachador: 'Marcus Thorne',
-        licencia: '3381-DL-44',
-        conductorId: auth.currentUser?.uid || 'guest',
-        estado: 'activo',
-        registradoEn: serverTimestamp(),
-      });
+      const user = auth.currentUser;
+      if (!user) throw new Error("No hay sesión activa.");
+
+      const finalUnit = {
+        placa: unitData.placa || '',
+        disco: unitData.disco || '',
+        marca: unitData.marca || '',
+        modelo: unitData.modelo || '',
+        busType: unitData.busType || 'Normal',
+        hasAssistant: unitData.hasAssistant || 'No',
+        seatingType: unitData.seatingType || 'Básico',
+        hasCompartment: unitData.hasCompartment || false,
+        amenities: unitData.amenities || [],
+        topologia: grids, 
+        capacidad: totalAsientos,
+        empresa_ruc: unitData.ruc_empresa || 'S/R',
+        nombre_cooperativa: unitData.nombre_cooperativa || 'Cooperativa',
+        creadoPor: user.uid,
+        estado: 'ACTIVO',
+        rol: 'BUS',
+        createdAt: serverTimestamp(),
+      };
+
+      // 1. Guardar la unidad DEFINITIVA
+      const unitRef = await addDoc(collection(db, 'units'), finalUnit);
+
+      // 2. Vincular unidad al perfil y asegurar que el usuario tenga el rol BUS
+      await setDoc(doc(db, 'users', user.uid), {
+        unidadAsignada: unitRef.id,
+        discoAsignado: unitData.disco,
+        placaAsignada: unitData.placa,
+        rol: 'BUS', // Forzamos el rol BUS para que aparezca en el ERP
+        ruc_empresa: unitData.ruc_empresa || '',
+        nombre_cooperativa: unitData.nombre_cooperativa || ''
+      }, { merge: true });
+
+      // 3. Limpiar el borrador
+      await deleteDoc(doc(db, 'units_draft', draftId));
+
       navigate('/driver-dashboard');
     } catch (e: any) {
       setError('Error al guardar: ' + e.message);
@@ -31,239 +85,160 @@ const UnitConfirmation: React.FC = () => {
     }
   };
 
+  const getCellColor = (type: string) => {
+    if (type === 'seat') return 'bg-white text-[#00216e] border-[#00216e]/20';
+    if (type === 'bathroom') return 'bg-amber-100 text-amber-600 border-amber-200';
+    if (type === 'entrance') return 'bg-emerald-100 text-emerald-600 border-emerald-200';
+    return 'bg-slate-50 text-slate-300 border-slate-100';
+  };
+
+  if (loading) return <div className="h-screen flex items-center justify-center bg-[#f7f9fb]"><div className="animate-spin rounded-full h-12 w-12 border-t-2 border-[#00216e]"></div></div>;
+
   return (
     <div className="bg-[#f7f9fb] text-[#191c1e] font-body antialiased min-h-screen">
-      {/* TopAppBar */}
-      <header className="w-full sticky top-0 z-50 bg-[#f7f9fb] flex justify-between items-center px-8 py-4 border-b border-[#eceef0]">
+      <header className="w-full sticky top-0 z-50 bg-[#f7f9fb]/80 backdrop-blur-md flex justify-between items-center px-12 py-6 border-b border-[#eceef0]">
         <div className="flex items-center gap-4">
-          <span className="text-xl font-black text-[#191c1e]">The Orchestrator</span>
-          <div className="h-6 w-[1px] bg-[#c6c6cd] opacity-30"></div>
-          <span className="font-bold text-[#191c1e]">Resumen y Confirmación Final</span>
+          <div className="w-10 h-10 bg-[#00216e] rounded-xl flex items-center justify-center text-white">
+             <span className="material-symbols-outlined font-black">verified</span>
+          </div>
+          <span className="text-xl font-black text-[#191c1e] italic uppercase italic">Certificación de Activo</span>
         </div>
-        <div className="flex items-center gap-6">
-          <button onClick={() => window.open('mailto:soporte@orchestrator.ec')} className="flex items-center gap-2 text-[#45464d] hover:bg-[#f2f4f6] transition-colors px-3 py-2 rounded-xl">
-            <span className="material-symbols-outlined">help_outline</span>
-            <span className="text-[10px] font-black uppercase tracking-wider">Soporte</span>
-          </button>
-        </div>
+        <button onClick={() => navigate('/seat-designer', { state: { draftId, unitData, grids } })} className="bg-slate-900 text-white px-8 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-black transition-all flex items-center gap-2 shadow-lg">
+           <span className="material-symbols-outlined text-sm">edit</span>
+           Modificar Diseño
+        </button>
       </header>
 
-      <main className="max-w-6xl mx-auto px-8 py-12">
-        {/* Title */}
-        <div className="mb-12">
-          <div className="flex items-center gap-2 mb-3">
-            <span className="material-symbols-outlined text-[#3755c3]">verified</span>
-            <span className="text-[10px] font-black uppercase tracking-widest text-[#3755c3]">Paso Final</span>
-          </div>
-          <h1 className="text-4xl font-black text-[#191c1e] mb-4 tracking-tight">Verificación de Precisión</h1>
-          <p className="text-[#45464d] max-w-2xl leading-relaxed font-medium">
-            Por favor verifique los parámetros de orquestación antes de finalizar el registro. La precisión asegura la continuidad operativa en toda la red logística de Ecuador.
-          </p>
+      <main className="max-w-6xl mx-auto px-12 py-16">
+        <div className="mb-20">
+          <h1 className="text-5xl font-black text-[#191c1e] mb-6 tracking-tighter italic leading-none">{unitData.nombre_cooperativa?.toUpperCase()}</h1>
+          <p className="text-slate-400 text-xs font-black uppercase tracking-[0.4em]">Resumen de especificaciones técnicas y topológicas</p>
         </div>
 
-        <div className="grid grid-cols-12 gap-6 items-start">
-          {/* Left Column */}
-          <div className="col-span-12 lg:col-span-8 space-y-6">
+        <div className="grid grid-cols-12 gap-12">
+          <div className="col-span-12 lg:col-span-8 space-y-12">
+             {/* Datos Técnicos */}
+             <div className="bg-white rounded-[4rem] p-12 shadow-sm border border-slate-50">
+               <div className="flex items-center gap-4 mb-14">
+                  <span className="material-symbols-outlined text-[#00216e] filled-icon">description</span>
+                  <h3 className="text-[10px] font-black uppercase tracking-[0.3em] text-[#00216e]">Ficha Técnica del Vehículo</h3>
+               </div>
+               
+               <div className="grid grid-cols-2 gap-y-12 gap-x-10">
+                  <div className="bg-slate-50 p-6 rounded-3xl">
+                    <p className="text-[9px] font-black text-slate-300 uppercase tracking-widest mb-2">Placa Nacional</p>
+                    <p className="text-3xl font-black tracking-tight text-[#191c1e] uppercase">{unitData.placa}</p>
+                  </div>
+                  <div className="bg-[#00216e]/5 p-6 rounded-3xl">
+                    <p className="text-[9px] font-black text-[#00216e]/30 uppercase tracking-widest mb-2">Disco Asignado</p>
+                    <p className="text-3xl font-black tracking-tight text-[#00216e]">#{unitData.disco}</p>
+                  </div>
+                  
+                  <div className="col-span-2 grid grid-cols-3 gap-6">
+                     <div className="border-l-4 border-slate-100 pl-4">
+                        <p className="text-[9px] font-black text-slate-300 uppercase mb-1">Modelo</p>
+                        <p className="font-black text-sm uppercase">{unitData.modelo}</p>
+                     </div>
+                     <div className="border-l-4 border-slate-100 pl-4">
+                        <p className="text-[9px] font-black text-slate-300 uppercase mb-1">Asientos</p>
+                        <p className="font-black text-sm uppercase">{unitData.seatingType}</p>
+                     </div>
+                     <div className="border-l-4 border-slate-100 pl-4">
+                        <p className="text-[9px] font-black text-slate-300 uppercase mb-1">Pasajeros</p>
+                        <p className="font-black text-sm uppercase">{totalAsientos} Capacidad</p>
+                     </div>
+                  </div>
 
-            {/* Company & Logistics Hub */}
-            <div className="bg-white rounded-[2rem] p-8 flex flex-col md:flex-row gap-8 shadow-sm border border-slate-100">
-              <div className="flex-1">
-                <div className="flex items-center gap-3 mb-6">
-                  <span className="material-symbols-outlined text-[#45464d]">corporate_fare</span>
-                  <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-[#45464d]">Entidad Logística</h3>
-                </div>
-                <div className="space-y-5">
-                  <div>
-                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">Nombre de la Cooperativa</p>
-                    <p className="text-xl font-bold text-[#191c1e]">Alpha Trans-Continental S.A.</p>
+                  <div className="col-span-2 flex flex-wrap gap-3 pt-6">
+                     <span className={`px-4 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest border ${unitData.hasAssistant === 'Sí' ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : 'bg-slate-50 text-slate-400 border-slate-100'}`}>
+                        {unitData.hasAssistant === 'Sí' ? 'Con Ayudante' : 'Solo Conductor'}
+                     </span>
+                     <span className={`px-4 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest border ${unitData.hasCompartment ? 'bg-blue-50 text-blue-600 border-blue-100' : 'bg-slate-50 text-slate-400 border-slate-100'}`}>
+                        {unitData.hasCompartment ? 'Bodega Habilitada' : 'Sin Bodega'}
+                     </span>
+                     {unitData.amenities?.map((am: string) => (
+                        <span key={am} className="px-4 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest bg-slate-900 text-white">
+                           {am === 'ac_unit' ? 'Aire Acondicionado' : am.toUpperCase()}
+                        </span>
+                     ))}
                   </div>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">ID de Registro</p>
-                      <p className="font-mono text-sm font-bold">ATC-9942-XQ</p>
-                    </div>
-                    <div>
-                      <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">Centro Operativo</p>
-                      <p className="text-sm font-bold">Terminal Central Nord</p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-              <div className="w-full md:w-48 h-48 rounded-2xl bg-[#eceef0] overflow-hidden flex-shrink-0">
-                <img
-                  className="w-full h-full object-cover"
-                  alt="Modern logistics warehouse"
-                  src="https://lh3.googleusercontent.com/aida-public/AB6AXuA6lB-dbPHWPwFLoL6gkATw3I1sKvsiUzMd3-ha7MxjpagAF_t_Nthx07lGk1CkVjznBnZrII4J7EEiirCkZh3rHmA7bM92wYpO1iRv4Lu7Yh5N-KW_YsFhoPmt6toFBIo92Qum7v_VbHImwJ0fIgrhjbwOC49w2IqlGef9KHhKqjpck4PkJm1PhuSXZdR27j22Arq3WYeBoeLQ5hJJ6YqEQOPPwUtHNrOfjOQZafwK_UQdlhHylRVyIGc0-4_em5cTP_0bbdoYOv_e"
-                />
-              </div>
-            </div>
+               </div>
+             </div>
 
-            {/* Driver & Asset */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="bg-white rounded-[2rem] p-8 shadow-sm border border-slate-100">
-                <div className="flex items-center gap-3 mb-6">
-                  <span className="material-symbols-outlined text-[#45464d]">badge</span>
-                  <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-[#45464d]">Despachador Principal</h3>
-                </div>
-                <div className="flex items-center gap-4 mb-6">
-                  <div className="w-16 h-16 rounded-2xl bg-[#d0e1fb] overflow-hidden flex-shrink-0">
-                    <img
-                      className="w-full h-full object-cover"
-                      alt="Dispatcher"
-                      src="https://lh3.googleusercontent.com/aida-public/AB6AXuB0qwEUxlk2hVu8Pub_9o7ATWvVJ8-Sl4l1-kKggYjtczITVDV3tUSptTS02M2Xpah4xNQvNZ_-PtW9BlaDux-VJDt7xfQTebIvqQ-lKqZS7hhiURIhmbx7PdifPv3CuoKkceSRFjQchuwKlOSLhorkOUW2QzSaewM0vMt3dl3ZohMRIKJ7SpWa3ArUDg1XajU7rly4uv6An9E7rz2fjHOTNwETHvGr7MBTRZiKRx0colWIMfEFcqx2rHXMTn2vT5HwLRho70QoA2Ai"
-                    />
-                  </div>
-                  <div>
-                    <p className="text-lg font-black text-[#191c1e]">Marcus Thorne</p>
-                    <p className="text-xs font-bold text-[#45464d]">Licencia #3381-DL-44</p>
-                  </div>
-                </div>
-                <div className="bg-[#f2f4f6] p-4 rounded-xl">
-                  <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">Contacto</p>
-                  <p className="text-xs font-bold">m.thorne@orchestrator.logistics</p>
-                </div>
-              </div>
+             {/* Topología Visual */}
+             <div className="bg-white rounded-[4rem] p-12 shadow-sm border border-slate-50">
+               <div className="flex items-center gap-4 mb-12">
+                  <span className="material-symbols-outlined text-[#00216e]">view_quilt</span>
+                  <h3 className="text-[10px] font-black uppercase tracking-[0.3em] text-[#00216e]">Topología Estructural</h3>
+               </div>
 
-              <div className="bg-white rounded-[2rem] p-8 shadow-sm border-l-4 border-[#3755c3]">
-                <div className="flex items-center gap-3 mb-6">
-                  <span className="material-symbols-outlined text-[#45464d]">directions_bus</span>
-                  <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-[#45464d]">Especificaciones del Activo</h3>
-                </div>
-                <div className="space-y-4">
-                  {[
-                    { label: 'Modelo', value: 'AeroCoach X-200', mono: false },
-                    { label: 'Chasis', value: 'VN-99201-9X', mono: true },
-                    { label: 'Combustible', value: 'Hidrógeno-Eléctrico', mono: false },
-                    { label: 'Configuración', value: 'EJECUTIVO-48', badge: true },
-                  ].map((row, i) => (
-                    <div key={i} className={`flex justify-between items-end ${i < 3 ? 'border-b border-[#eceef0]' : ''} pb-3`}>
-                      <span className="text-xs font-bold text-[#45464d]">{row.label}</span>
-                      {row.badge
-                        ? <span className="bg-[#eceef0] px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest">{row.value}</span>
-                        : <span className={`font-bold text-sm ${row.mono ? 'font-mono' : ''}`}>{row.value}</span>
-                      }
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-
-            {/* Seat Map Preview */}
-            <div className="bg-white rounded-[2rem] p-8 shadow-sm border border-slate-100">
-              <div className="flex justify-between items-center mb-8">
-                <div className="flex items-center gap-3">
-                  <span className="material-symbols-outlined text-[#45464d]">event_seat</span>
-                  <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-[#45464d]">Topología de Asientos</h3>
-                </div>
-                <button
-                  onClick={() => navigate('/seat-designer')}
-                  className="text-[#3755c3] text-[10px] font-black uppercase tracking-widest hover:underline flex items-center gap-1"
-                >
-                  <span className="material-symbols-outlined text-sm">edit</span>
-                  Modificar Rejilla
-                </button>
-              </div>
-              <div className="bg-[#f2f4f6] p-8 rounded-2xl">
-                <div className="max-w-xs mx-auto grid grid-cols-4 gap-2">
-                  <div className="col-span-1 bg-[#d8dadc] rounded-lg h-10 flex items-center justify-center">
-                    <span className="material-symbols-outlined text-sm text-[#45464d]">steering_wheel</span>
+               <div className="bg-slate-50 rounded-[3rem] p-12">
+                  <div className="max-w-xs mx-auto space-y-4">
+                     <p className="text-[8px] font-black text-center text-slate-400 mb-6 tracking-[0.4em]">
+                        {unitData.busType === 'Normal' ? 'LAYOUT CABINA ÚNICA' : 'LAYOUT SEGUNDO PISO'}
+                     </p>
+                     <div className="grid grid-cols-4 gap-3">
+                        {superiorCells.map((c: any) => (
+                           <div key={c.id} className={`aspect-square rounded-xl flex items-center justify-center text-[10px] font-black border transition-all ${getCellColor(c.type)}`}>
+                              {c.type === 'seat' ? c.label : c.type === 'bathroom' ? 'WC' : c.type === 'entrance' ? 'ENT' : ''}
+                           </div>
+                        ))}
+                     </div>
+                     
+                     {unitData.busType === 'Dos Pisos' && inferiorCells.length > 0 && (
+                        <>
+                           <div className="h-px bg-slate-200 my-10"></div>
+                           <p className="text-[8px] font-black text-center text-slate-400 mb-6 tracking-[0.4em]">LAYOUT PRIMER PISO</p>
+                           <div className="grid grid-cols-4 gap-3">
+                              {inferiorCells.map((c: any) => (
+                                 <div key={c.id} className={`aspect-square rounded-xl flex items-center justify-center text-[10px] font-black border transition-all ${getCellColor(c.type)}`}>
+                                    {c.type === 'seat' ? c.label : c.type === 'bathroom' ? 'WC' : c.type === 'entrance' ? 'ENT' : ''}
+                                 </div>
+                              ))}
+                           </div>
+                        </>
+                     )}
                   </div>
-                  <div className="col-span-3"></div>
-                  {[
-                    { label: '1A', occ: true }, { label: '1B', occ: true }, { label: '', empty: true }, { label: '1C', occ: false },
-                    { label: '2A', occ: true }, { label: '2B', occ: true }, { label: '', empty: true }, { label: '2C', occ: true },
-                    { label: '3A', occ: false }, { label: '3B', occ: true }, { label: '', empty: true }, { label: '3C', occ: true },
-                    { label: '4A', occ: true }, { label: '4B', occ: true }, { label: '', empty: true }, { label: '4C', occ: false },
-                  ].map((s, i) => (
-                    s.empty
-                      ? <div key={i} className="h-10"></div>
-                      : <div key={i} className={`h-10 rounded-lg flex items-center justify-center text-[10px] font-black ${s.occ ? 'bg-[#191c1e] text-white' : 'bg-[#d0e1fb] text-[#54647a]'}`}>{s.label}</div>
-                  ))}
-                </div>
-                <div className="mt-8 flex justify-center gap-8">
-                  <div className="flex items-center gap-2">
-                    <div className="w-4 h-4 bg-[#191c1e] rounded-md"></div>
-                    <span className="text-[10px] font-black text-[#45464d] uppercase tracking-widest">Ocupado/Fijo</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <div className="w-4 h-4 bg-[#d0e1fb] rounded-md"></div>
-                    <span className="text-[10px] font-black text-[#45464d] uppercase tracking-widest">Disponible</span>
-                  </div>
-                </div>
-              </div>
-            </div>
+               </div>
+             </div>
           </div>
 
-          {/* Right Column: Actions */}
-          <div className="col-span-12 lg:col-span-4 sticky top-24 space-y-6">
-            <div className="bg-gradient-to-br from-[#3755c3] to-[#607cec] text-white rounded-[2rem] p-8 shadow-2xl shadow-[#3755c3]/30">
-              <h3 className="text-[10px] font-black uppercase tracking-[0.2em] mb-6">Envío Final</h3>
-              <p className="text-sm opacity-80 mb-10 leading-relaxed font-medium">
-                Al hacer clic en confirmar, usted certifica que todos los datos de activos y asignaciones de personal cumplen con los Protocolos del Orchestrator.
-              </p>
-              {error && <p className="text-red-400 text-xs font-bold mb-4">{error}</p>}
-              <button
-                onClick={handleConfirm}
-                disabled={isSaving}
-                className="w-full bg-white text-[#001453] font-black py-5 rounded-2xl hover:bg-[#f2f4f6] transition-all flex items-center justify-center gap-3 shadow-xl active:scale-95 text-[10px] uppercase tracking-widest disabled:opacity-50"
-              >
-                {isSaving ? 'Guardando...' : 'Confirmar Registro'}
-                <span className="material-symbols-outlined text-lg">arrow_forward</span>
-              </button>
-              <button
-                onClick={() => navigate('/seat-designer')}
-                className="w-full mt-4 text-white border border-white/20 font-black py-4 rounded-2xl hover:bg-white/10 transition-all flex items-center justify-center gap-3 text-[10px] uppercase tracking-widest"
-              >
-                <span className="material-symbols-outlined text-lg">keyboard_backspace</span>
-                Regresar
-              </button>
-            </div>
+          <div className="col-span-12 lg:col-span-4">
+             <div className="sticky top-32 space-y-8">
+                <div className="bg-[#00216e] text-white rounded-[3.5rem] p-12 shadow-2xl relative overflow-hidden">
+                   <div className="absolute -right-10 -top-10 w-48 h-48 bg-blue-500/20 rounded-full blur-3xl"></div>
+                   <h4 className="text-[10px] font-black uppercase tracking-[0.4em] text-blue-300 mb-10 italic">Validación Operativa</h4>
+                   <p className="text-sm font-medium opacity-70 leading-relaxed mb-12">Esta unidad será integrada a la flota activa de <b>{unitData.nombre_cooperativa}</b>. Confirme que todos los datos son correctos.</p>
+                   
+                   {error && <div className="bg-red-500/20 border border-red-500/30 p-5 rounded-[2rem] mb-8 text-red-100 text-[10px] font-black uppercase">{error}</div>}
 
-            {/* System Validation */}
-            <div className="bg-white rounded-[2rem] p-8 shadow-sm border border-slate-100">
-              <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-[#45464d] mb-6">Validación del Sistema</h4>
-              <div className="space-y-4">
-                {[
-                  'Chequeo de Cumplimiento Pasado',
-                  'Credenciales de Conductor Validadas',
-                  'Topología de Asientos Verificada',
-                ].map((item, i) => (
-                  <div key={i} className="flex items-center gap-3">
-                    <span className="material-symbols-outlined text-emerald-500 text-lg" style={{ fontVariationSettings: "'FILL' 1" }}>check_circle</span>
-                    <span className="text-xs font-bold text-[#191c1e]">{item}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
+                   <button 
+                     onClick={handleConfirm}
+                     disabled={isSaving}
+                     className="w-full bg-white h-24 rounded-[2.5rem] text-[#00216e] font-black text-xs uppercase tracking-[0.4em] hover:scale-105 active:scale-95 transition-all shadow-xl disabled:opacity-50 group flex flex-col items-center justify-center gap-1"
+                   >
+                     {isSaving ? 'CONECTANDO...' : 'FINALIZAR REGISTRO'}
+                     {!isSaving && <span className="text-[8px] opacity-40 font-bold group-hover:opacity-100">Click para publicar</span>}
+                   </button>
+                   
+                   <button onClick={() => navigate('/unit-registration')} className="w-full mt-6 py-4 border border-white/10 rounded-[2rem] text-[9px] font-black uppercase tracking-widest text-blue-200/50 hover:bg-white/5 transition-all">
+                      Regresar al paso 1
+                   </button>
+                </div>
 
-            {/* Image Banner */}
-            <div className="relative overflow-hidden rounded-[2rem] h-44 group shadow-xl">
-              <img
-                className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
-                alt="Luxury bus dashboard"
-                src="https://lh3.googleusercontent.com/aida-public/AB6AXuBF_5KBN3FEEk6_MOI3QeT1XliEDfvOPV9XfMaDJwmWs3Iyl1UNhYgNV0XYW3OZFcNPXKweVgSF-bb3LtkA6IpnbtJYtdl6s0noR7gqF5H64DE8h99jepjVHWCxT9zSL7FstZXUtcpB72gG1aXndvxV3XNw5fmJ7QGXqH1aQ1I8_SrfM9h2mMHxkecWfs-wN2XdQgBnhrk4T22_D3bIDKz77oPBIuSZCfmQ6QiMuedM0XZ3HEveeKN6GoHry9ycKLG4H-rqRLZvA8eS"
-              />
-              <div className="absolute inset-0 bg-[#001453]/50 flex items-end p-6">
-                <p className="text-[10px] text-white font-black uppercase tracking-widest">Inteligencia de Flota 1.0</p>
-              </div>
-            </div>
+                <div className="bg-white p-10 rounded-[4rem] border border-slate-100 flex flex-col items-center gap-6 text-center">
+                   <div className="w-20 h-20 bg-blue-50 rounded-[2.5rem] flex items-center justify-center text-blue-600">
+                      <span className="material-symbols-outlined text-4xl">security</span>
+                   </div>
+                   <div>
+                      <p className="text-[10px] font-black text-slate-300 uppercase tracking-widest mb-2">Protocolo de Seguridad</p>
+                      <p className="text-xs font-black text-slate-900 leading-relaxed italic">Activo certificado bajo los estándares de Logística Alpha Ecuador.</p>
+                   </div>
+                </div>
+             </div>
           </div>
         </div>
       </main>
-
-      <footer className="mt-20 border-t border-[#eceef0] py-12 px-8">
-        <div className="max-w-6xl mx-auto flex flex-col md:flex-row justify-between items-center gap-8">
-          <div className="flex flex-col gap-2">
-            <span className="text-lg font-black text-[#191c1e] uppercase tracking-tighter">The Orchestrator</span>
-            <p className="text-[10px] font-bold text-[#45464d] uppercase tracking-widest">Suite de Gestión Logística Global</p>
-          </div>
-          <div className="flex gap-8 text-[10px] font-black uppercase tracking-widest text-[#45464d]">
-            <a className="hover:text-[#3755c3] transition-colors" href="#">Protocolo de Seguridad</a>
-            <a className="hover:text-[#3755c3] transition-colors" href="#">Política de Privacidad</a>
-            <a className="hover:text-[#3755c3] transition-colors" href="#">Estado de Infraestructura</a>
-          </div>
-        </div>
-      </footer>
     </div>
   );
 };

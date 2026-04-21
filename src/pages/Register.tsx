@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { auth, db } from '../firebase';
+import { auth, db, isDemoMode } from '../firebase';
 import { createUserWithEmailAndPassword } from 'firebase/auth';
 import { doc, setDoc } from 'firebase/firestore';
 
@@ -23,10 +23,28 @@ const Register: React.FC = () => {
     if (cedula.length === 10 && !isNaN(Number(cedula))) {
       setLoading(true);
       setError('');
+
+      if (isDemoMode) {
+        await new Promise(resolve => setTimeout(resolve, 800));
+        if (cedula === '0103869137') {
+          setNombre('PEDRO ARMANDO');
+          setApellido('PESANTEZ');
+          setFechaNacimiento('1990-05-15');
+        } else {
+          setNombre('USUARIO');
+          setApellido('DE PRUEBA');
+          setFechaNacimiento('1995-10-20');
+        }
+        setIsValidated(true);
+        setLoading(false);
+        return;
+      }
+
       try {
         const proxyUrl = 'https://infoplacas.herokuapp.com/';
+        // ...
         const targetUrl = 'https://si.secap.gob.ec/sisecap/logeo_web/json/busca_persona_registro_civil.php';
-        
+
         const params = new URLSearchParams();
         params.append('documento', cedula);
         params.append('tipo', '1');
@@ -40,9 +58,9 @@ const Register: React.FC = () => {
         });
 
         if (!response.ok) throw new Error('Error en la solicitud');
-        
+
         const data = await response.json();
-        
+
         if (data && data.nombres && data.apellidos) {
           setNombre(data.nombres);
           setApellido(data.apellidos);
@@ -68,14 +86,14 @@ const Register: React.FC = () => {
       setError('Primero debes validar tu cédula');
       return;
     }
-    
+
     setLoading(true);
     setError('');
-    
+
     try {
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
       const user = userCredential.user;
-      
+
       await setDoc(doc(db, 'users', user.uid), {
         cedula,
         nombre,
@@ -85,10 +103,10 @@ const Register: React.FC = () => {
         celular,
         provincia,
         canton,
-        role: 'USUARIO',
+        role: 'CLIENTE',
         createdAt: new Date().toISOString()
       });
-      
+
       navigate('/dashboard');
     } catch (err: any) {
       setError(err.message || 'Error al crear la cuenta');
@@ -143,7 +161,7 @@ const Register: React.FC = () => {
               </div>
             </div>
             <div className="relative rounded-[2rem] overflow-hidden h-48">
-              <img className="w-full h-full object-cover" alt="Bus en Ecuador" src="https://images.unsplash.com/photo-1544620347-c4fd4a3d5957?auto=format&fit=crop&q=80&w=800"/>
+              <img className="w-full h-full object-cover" alt="Bus en Ecuador" src="https://images.unsplash.com/photo-1544620347-c4fd4a3d5957?auto=format&fit=crop&q=80&w=800" />
               <div className="absolute inset-0 bg-gradient-to-t from-primary/60 to-transparent"></div>
               <div className="absolute bottom-4 left-6">
                 <span className="text-xs font-bold text-secondary-fixed tracking-widest uppercase">Ecuador Conectado</span>
@@ -158,7 +176,7 @@ const Register: React.FC = () => {
                 <h2 className="text-2xl font-bold text-primary mb-2 font-headline">Crear nueva cuenta</h2>
                 <p className="text-slate-500 text-sm font-body">Ingresa tus datos personales para continuar con el registro.</p>
               </div>
-              
+
               <form onSubmit={handleRegister} className="space-y-6">
                 {error && (
                   <div className="bg-error-container text-on-error-container p-4 rounded-2xl text-sm font-medium flex items-center gap-2">
@@ -170,10 +188,10 @@ const Register: React.FC = () => {
                 <div className="flex flex-col gap-2">
                   <label className="text-[10px] font-bold uppercase tracking-widest text-slate-400 ml-1">Cédula de Identidad (10 dígitos)</label>
                   <div className="relative group">
-                    <input 
-                      className="w-full bg-surface-container-low border-none rounded-2xl py-4 pl-12 pr-4 focus:ring-2 focus:ring-primary/20 transition-all text-on-surface font-semibold placeholder:font-normal placeholder:text-slate-400" 
-                      maxLength={10} 
-                      placeholder="Ej: 1712345678" 
+                    <input
+                      className="w-full bg-surface-container-low border-none rounded-2xl py-4 pl-12 pr-4 focus:ring-2 focus:ring-primary/20 transition-all text-on-surface font-semibold placeholder:font-normal placeholder:text-slate-400"
+                      maxLength={10}
+                      placeholder="Ej: 1712345678"
                       type="text"
                       value={cedula}
                       onChange={(e) => setCedula(e.target.value)}
@@ -211,9 +229,9 @@ const Register: React.FC = () => {
                   <div className="flex flex-col gap-2">
                     <label className="text-[10px] font-bold uppercase tracking-widest text-slate-400 ml-1">Correo Electrónico</label>
                     <div className="relative">
-                      <input 
-                        className="w-full bg-surface-container-low border-none rounded-2xl py-4 pl-12 pr-4 focus:ring-2 focus:ring-primary/20 transition-all font-body" 
-                        placeholder="usuario@ejemplo.com" 
+                      <input
+                        className="w-full bg-surface-container-low border-none rounded-2xl py-4 pl-12 pr-4 focus:ring-2 focus:ring-primary/20 transition-all font-body"
+                        placeholder="usuario@ejemplo.com"
                         type="email"
                         value={email}
                         onChange={(e) => setEmail(e.target.value)}
@@ -222,14 +240,14 @@ const Register: React.FC = () => {
                       <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-slate-400">alternate_email</span>
                     </div>
                   </div>
-                  
+
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="flex flex-col gap-2">
                       <label className="text-[10px] font-bold uppercase tracking-widest text-slate-400 ml-1">Contraseña</label>
                       <div className="relative">
-                        <input 
-                          className="w-full bg-surface-container-low border-none rounded-2xl py-4 pl-12 pr-4 focus:ring-2 focus:ring-primary/20 transition-all font-body" 
-                          placeholder="••••••••" 
+                        <input
+                          className="w-full bg-surface-container-low border-none rounded-2xl py-4 pl-12 pr-4 focus:ring-2 focus:ring-primary/20 transition-all font-body"
+                          placeholder="••••••••"
                           type="password"
                           value={password}
                           onChange={(e) => setPassword(e.target.value)}
@@ -242,9 +260,9 @@ const Register: React.FC = () => {
                     <div className="flex flex-col gap-2">
                       <label className="text-[10px] font-bold uppercase tracking-widest text-slate-400 ml-1">Celular</label>
                       <div className="relative">
-                        <input 
-                          className="w-full bg-surface-container-low border-none rounded-2xl py-4 pl-12 pr-4 focus:ring-2 focus:ring-primary/20 transition-all font-body" 
-                          placeholder="0987654321" 
+                        <input
+                          className="w-full bg-surface-container-low border-none rounded-2xl py-4 pl-12 pr-4 focus:ring-2 focus:ring-primary/20 transition-all font-body"
+                          placeholder="0987654321"
                           type="tel"
                           value={celular}
                           onChange={(e) => setCelular(e.target.value)}
@@ -258,7 +276,7 @@ const Register: React.FC = () => {
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="flex flex-col gap-2">
                       <label className="text-[10px] font-bold uppercase tracking-widest text-slate-400 ml-1">Provincia</label>
-                      <select 
+                      <select
                         className="w-full bg-surface-container-low border-none rounded-2xl py-4 px-4 focus:ring-2 focus:ring-primary/20 transition-all appearance-none cursor-pointer font-body"
                         value={provincia}
                         onChange={(e) => setProvincia(e.target.value)}
@@ -273,7 +291,7 @@ const Register: React.FC = () => {
                     </div>
                     <div className="flex flex-col gap-2">
                       <label className="text-[10px] font-bold uppercase tracking-widest text-slate-400 ml-1">Cantón</label>
-                      <select 
+                      <select
                         className="w-full bg-surface-container-low border-none rounded-2xl py-4 px-4 focus:ring-2 focus:ring-primary/20 transition-all appearance-none cursor-pointer font-body"
                         value={canton}
                         onChange={(e) => setCanton(e.target.value)}
@@ -290,8 +308,8 @@ const Register: React.FC = () => {
                 </div>
 
                 <div className="pt-6">
-                  <button 
-                    className={`w-full bg-gradient-to-r from-primary to-primary-container text-white font-bold py-5 rounded-2xl shadow-xl shadow-primary/20 active:scale-[0.98] transition-all flex items-center justify-center gap-3 font-headline ${(!isValidated || loading) ? 'opacity-50 cursor-not-allowed' : ''}`} 
+                  <button
+                    className={`w-full bg-gradient-to-r from-primary to-primary-container text-white font-bold py-5 rounded-2xl shadow-xl shadow-primary/20 active:scale-[0.98] transition-all flex items-center justify-center gap-3 font-headline ${(!isValidated || loading) ? 'opacity-50 cursor-not-allowed' : ''}`}
                     type="submit"
                     disabled={!isValidated || loading}
                   >

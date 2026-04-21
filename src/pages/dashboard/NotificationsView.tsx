@@ -1,102 +1,68 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 
-interface NotificationsViewProps {
-  setView: (view: any) => void;
+interface Notification {
+  id: string;
+  title: string;
+  content: string;
+  time: string;
+  type: 'INFO' | 'SUCCESS' | 'WARNING';
+  read: boolean;
 }
 
-const NotificationsView: React.FC<NotificationsViewProps> = ({ setView }) => {
-  const [notifications, setNotifications] = useState([
-    {
-      id: 1,
-      title: '¡Tu unidad está cerca!',
-      content: 'La unidad 402 de Cooperativa Loja está a 10 minutos de tu ubicación.',
-      time: 'Hace 5 mins',
-      icon: 'info',
-      color: 'secondary',
-      read: false,
-    },
-    {
-      id: 2,
-      title: 'Pago Confirmado',
-      content: 'Tu ticket para Cuenca - Guayaquil ha sido generado con éxito.',
-      time: 'Hace 1 hora',
-      icon: 'confirmation_number',
-      color: 'primary',
-      read: false,
-    },
-    {
-      id: 3,
-      title: 'Mantenimiento de Plataforma',
-      content: 'Realizaremos mejoras técnicas hoy a las 23:00 PM.',
-      time: 'Ayer',
-      icon: 'campaign',
-      color: 'outline',
-      read: true,
-    },
-  ]);
+const NotificationsView: React.FC<{ setView: (v: any) => void }> = ({ setView }) => {
+  const [notifications, setNotifications] = useState<Notification[]>([]);
 
-  const markRead = (id: number) => {
-    setNotifications(prev => prev.map(n => n.id === id ? { ...n, read: true } : n));
-  };
+  useEffect(() => {
+    const saved = localStorage.getItem('notifications');
+    if (saved) {
+      setNotifications(JSON.parse(saved));
+    } else {
+      // Default initial notifications if empty
+      const initial: Notification[] = [
+        { id: '1', title: 'Bienvenido a Terminal Digital', content: 'Tu cuenta ha sido activada correctamente.', time: 'Reciente', type: 'SUCCESS', read: false },
+        { id: '2', title: 'Seguridad', content: 'Recuerda que nunca te pediremos tu clave por teléfono.', time: 'Hoy', type: 'INFO', read: false }
+      ];
+      setNotifications(initial);
+      localStorage.setItem('notifications', JSON.stringify(initial));
+    }
+  }, []);
 
   const markAllRead = () => {
-    setNotifications(prev => prev.map(n => ({ ...n, read: true })));
+    const updated = notifications.map(n => ({ ...n, read: true }));
+    setNotifications(updated);
+    localStorage.setItem('notifications', JSON.stringify(updated));
   };
 
-  const unreadCount = notifications.filter(n => !n.read).length;
-
   return (
-    <div className="animate-fade-in max-w-4xl mx-auto py-12 text-left">
-      <div className="flex items-center justify-between mb-8">
-        <div>
-          <h1 className="text-4xl font-extrabold font-headline text-primary">Notificaciones</h1>
-          {unreadCount > 0 && (
-            <p className="text-sm font-bold text-secondary mt-1">{unreadCount} sin leer</p>
-          )}
-        </div>
-        <button
-          onClick={markAllRead}
-          disabled={unreadCount === 0}
-          className="text-sm font-bold text-primary hover:underline font-headline disabled:opacity-40 disabled:cursor-not-allowed"
-        >
-          Marcar todas como leídas
-        </button>
-      </div>
-
-      <div className="space-y-4">
-        {notifications.map((n) => (
-          <div
-            key={n.id}
-            onClick={() => markRead(n.id)}
-            className={`bg-white p-6 rounded-2xl shadow-sm border-l-4 flex gap-4 transition-all hover:translate-x-1 cursor-pointer ${n.read ? 'opacity-60' : 'opacity-100'}`}
-            style={{ borderLeftColor: `var(--${n.color})` }}
-          >
-            <span className="material-symbols-outlined" style={{ color: `var(--${n.color})` }}>
-              {n.icon}
-            </span>
-            <div className="flex-1">
-              <div className="flex justify-between items-start">
-                <h4 className="font-bold font-headline">{n.title}</h4>
-                {!n.read && (
-                  <span className="w-2 h-2 bg-secondary rounded-full flex-shrink-0 mt-1.5 ml-2"></span>
-                )}
-              </div>
-              <p className="text-sm text-on-surface-variant font-body">{n.content}</p>
-              <span className="text-[10px] text-outline font-bold uppercase mt-2 block font-label">{n.time}</span>
-            </div>
+    <div className="animate-fade-in max-w-2xl mx-auto py-12 px-6">
+       <div className="flex justify-between items-end mb-12">
+          <div>
+             <h1 className="text-4xl font-black font-headline text-[#00216e] italic tracking-tighter uppercase">Alertas</h1>
+             <p className="text-slate-400 font-black text-[10px] uppercase tracking-widest mt-2">{notifications.filter(n => !n.read).length} Mensajes nuevos</p>
           </div>
-        ))}
-      </div>
+          <button onClick={markAllRead} className="text-[9px] font-black uppercase text-blue-500 tracking-widest hover:underline">Marcar leídos</button>
+       </div>
 
-      <div className="mt-12 text-center">
-        <button
-          onClick={() => setView('hub')}
-          className="text-primary font-bold font-headline flex items-center justify-center gap-2 mx-auto hover:bg-primary/5 px-6 py-3 rounded-xl transition-all"
-        >
-          <span className="material-symbols-outlined">arrow_back</span>
-          Volver al Inicio
-        </button>
-      </div>
+       <div className="space-y-4">
+          {notifications.map(n => (
+            <div key={n.id} className={`p-8 rounded-[2.5rem] bg-white shadow-sm border border-slate-100 flex gap-6 transition-all group ${n.read ? 'opacity-50' : 'opacity-100 shadow-xl'}`}>
+               <div className={`w-12 h-12 rounded-2xl flex items-center justify-center ${n.type === 'SUCCESS' ? 'bg-emerald-50 text-emerald-600' : 'bg-blue-50 text-blue-600'}`}>
+                  <span className="material-symbols-outlined">{n.type === 'SUCCESS' ? 'verified' : 'info'}</span>
+               </div>
+               <div className="flex-1">
+                  <h4 className="font-black text-[#00216e] uppercase italic tracking-tighter">{n.title}</h4>
+                  <p className="text-slate-500 text-sm font-medium mt-1">{n.content}</p>
+                  <span className="text-[9px] font-black text-slate-300 uppercase mt-4 block">{n.time}</span>
+               </div>
+            </div>
+          ))}
+
+          {notifications.length === 0 && (
+            <div className="py-20 text-center opacity-20 italic font-black uppercase text-xs tracking-widest">No hay notificaciones</div>
+          )}
+       </div>
+
+       <button onClick={() => setView('hub')} className="mt-12 w-full py-5 bg-slate-100 text-slate-400 rounded-3xl font-black text-[10px] uppercase tracking-[0.3em] hover:bg-slate-200 transition-all">Regresar</button>
     </div>
   );
 };

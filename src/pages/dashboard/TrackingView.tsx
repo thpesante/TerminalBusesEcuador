@@ -1,161 +1,134 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import MapBoxComponent from '../../components/MapBoxComponent';
+import { db, auth } from '../../firebase';
+import { collection, query, where, onSnapshot, orderBy, limit } from 'firebase/firestore';
+
+interface Ticket {
+  id: string;
+  destino: string;
+  origen: string;
+  asiento: number;
+  hora: string;
+  tripId: string;
+  ruc_empresa: string;
+}
 
 const TrackingView: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<'tracking' | 'history'>('tracking');
+  const [activeTicket, setActiveTicket] = useState<Ticket | null>(null);
+  const [loading, setLoading] = useState(true);
 
-  // Sample data for the map
+  useEffect(() => {
+    const user = auth.currentUser;
+    if (!user) return;
+
+    // Buscamos el ticket más reciente activo del usuario
+    const q = query(
+      collection(db, 'tickets'),
+      where('pasajero.uid', '==', user.uid),
+      where('estado', '==', 'ACTIVO'),
+      orderBy('createdAt', 'desc'),
+      limit(1)
+    );
+
+    const unsub = onSnapshot(q, (snapshot) => {
+      if (!snapshot.empty) {
+        setActiveTicket({ id: snapshot.docs[0].id, ...snapshot.docs[0].data() } as Ticket);
+      } else {
+        setActiveTicket(null);
+      }
+      setLoading(false);
+    });
+
+    return () => unsub();
+  }, []);
+
+  // Coordenadas fijas para la demo (en producción vendrían del bus vía Firestore)
   const busLocation: [number, number] = [-78.4720, -0.1900];
-  const terminalLocation: [number, number] = [-78.4678, -0.1807];
+  const terminalLocation: [number, number] = [-78.5256, -0.2858]; // Quitumbe
 
   const markers = [
-    { lngLat: busLocation, title: 'Bus 148-B', description: 'En camino a Terminal Carcelén', type: 'bus' as const },
-    { lngLat: terminalLocation, title: 'Terminal Carcelén', description: 'Destino final', type: 'terminal' as const }
+    { lngLat: busLocation, title: 'Tu Bus en Vivo', description: activeTicket ? `Rumbo a ${activeTicket.destino}` : 'En ruta', type: 'bus' as const },
+    { lngLat: terminalLocation, title: 'Terminal Destino', description: 'Punto de llegada', type: 'terminal' as const }
   ];
 
+  if (loading) return <div className="p-20 text-center text-primary font-black uppercase tracking-widest animate-pulse italic">Localizando tu frecuencia...</div>;
+
+  if (!activeTicket) {
+    return (
+      <div className="p-20 bg-white rounded-[4rem] border-2 border-dashed border-slate-100 text-center animate-fade-in">
+         <span className="material-symbols-outlined text-6xl text-slate-200 mb-6">location_off</span>
+         <h2 className="text-3xl font-black font-headline text-[#00216e] uppercase italic tracking-tighter">Sin Viajes en Curso</h2>
+         <p className="text-slate-400 mt-4 text-[10px] font-black uppercase tracking-widest max-w-sm mx-auto leading-loose">No hemos detectado tickets activos para seguimiento en este momento. Compra un boleto para activar el GPS.</p>
+      </div>
+    );
+  }
+
   return (
-    <div className="animate-fade-in">
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 mb-8 text-left">
-        {/* Map Section */}
-        <div className="lg:col-span-8 h-[500px] bg-surface-container-low rounded-3xl overflow-hidden relative shadow-sm group">
-          <MapBoxComponent center={busLocation} zoom={14} markers={markers} />
+    <div className="animate-fade-in space-y-8">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 text-left items-stretch">
+        {/* Live GPS Map */}
+        <div className="lg:col-span-8 h-[600px] bg-slate-100 rounded-[3.5rem] overflow-hidden relative shadow-2xl border-4 border-white group">
+          <MapBoxComponent center={busLocation} zoom={13} markers={markers} />
           
-          <div className="absolute bottom-6 left-6 right-6 lg:right-auto lg:w-80 glass-card bg-white/90 p-6 rounded-2xl shadow-xl border border-white/20 z-10">
-            <div className="flex justify-between items-start mb-4">
-              <div>
-                <p className="text-[10px] font-bold uppercase tracking-widest text-secondary mb-1 font-label">En Camino</p>
-                <h3 className="font-headline text-xl font-bold text-on-surface">Ruta Quito - Manta</h3>
-              </div>
-              <div className="bg-primary text-white px-3 py-1 rounded-full text-xs font-bold font-headline">148-B</div>
-            </div>
-            <div className="space-y-3 font-body">
-              <div className="flex items-center gap-3">
-                <span className="material-symbols-outlined text-primary text-xl">schedule</span>
-                <span className="text-on-surface-variant text-sm">Llega en <span className="font-bold text-on-surface">12 minutos</span></span>
-              </div>
-              <div className="flex items-center gap-3">
-                <span className="material-symbols-outlined text-primary text-xl">pin_drop</span>
-                <span className="text-on-surface-variant text-sm">Próxima parada: <span className="font-bold text-on-surface">Terminal Carcelén</span></span>
-              </div>
-            </div>
+          <div className="absolute top-8 left-8 bg-[#00113a] text-white p-6 rounded-3xl shadow-2xl border border-white/10 z-10">
+             <p className="text-[9px] font-black uppercase tracking-[0.3em] text-blue-300 mb-2 italic">Monitoreo Satelital</p>
+             <h3 className="text-2xl font-black font-headline italic tracking-tighter uppercase leading-none">{activeTicket.origen} → {activeTicket.destino}</h3>
+          </div>
+
+          <div className="absolute bottom-8 left-8 right-8 lg:w-96 bg-white/95 backdrop-blur-xl p-8 rounded-[2.5rem] shadow-2xl border border-white/50 z-10 flex flex-col gap-6">
+             <div className="flex items-center gap-6">
+                <div className="w-16 h-16 bg-[#00216e] text-white rounded-2xl flex items-center justify-center animate-pulse">
+                   <span className="material-symbols-outlined text-3xl">navigation</span>
+                </div>
+                <div>
+                   <p className="text-2xl font-black font-headline text-[#00216e] leading-none">12 MIN</p>
+                   <p className="text-[9px] font-black text-emerald-500 uppercase tracking-widest mt-1 italic">Tiempo est. de llegada</p>
+                </div>
+             </div>
+             <div className="h-px bg-slate-100"></div>
+             <div className="flex items-center gap-4">
+                <span className="material-symbols-outlined text-slate-300">pin_drop</span>
+                <p className="text-xs font-bold text-slate-500">Ubicación actual: <span className="text-[#00216e]">Entrada Sur (Quito)</span></p>
+             </div>
           </div>
         </div>
 
-        {/* Active Ticket Section */}
-        <div className="lg:col-span-4 bg-surface-container-lowest rounded-3xl p-6 flex flex-col shadow-sm border border-slate-100">
-          <div className="flex justify-between items-center mb-6">
-            <h2 className="font-headline text-lg font-extrabold text-primary">Boleto Digital</h2>
-            <span className="material-symbols-outlined text-emerald-500 filled-icon">verified</span>
-          </div>
-          <div className="flex-grow flex flex-col items-center justify-center py-4 bg-surface-container-low rounded-2xl mb-6">
-            <div className="p-4 bg-white rounded-xl shadow-inner border-2 border-dashed border-slate-200">
-              <img 
-                className="w-40 h-40 object-contain" 
-                alt="QR Code" 
-                src="https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=TR-9982-XQ22"
-              />
-            </div>
-            <p className="mt-4 font-mono text-xs font-medium text-slate-400 tracking-[0.2em]">TR-9982-XQ22</p>
-          </div>
-          <div className="space-y-4 font-body">
-            <div className="flex justify-between border-b border-slate-100 pb-2">
-              <span className="text-xs text-slate-400 font-bold uppercase">Asiento</span>
-              <span className="text-sm font-bold text-on-surface">A24 (Ventana)</span>
-            </div>
-            <div className="flex justify-between border-b border-slate-100 pb-2">
-              <span className="text-xs text-slate-400 font-bold uppercase">Hora Salida</span>
-              <span className="text-sm font-bold text-on-surface">09:15 AM</span>
-            </div>
-          </div>
-          <button className="mt-8 w-full bg-gradient-to-r from-primary to-primary-container text-white rounded-full py-4 font-headline font-bold text-sm tracking-wide shadow-lg active:scale-95 transition-transform flex items-center justify-center gap-2">
-            <span className="material-symbols-outlined text-lg">file_download</span>
-            DESCARGAR BOLETO
-          </button>
+        {/* Digital Ticket Detail */}
+        <div className="lg:col-span-4 bg-white rounded-[3.5rem] p-10 flex flex-col shadow-xl border border-slate-50">
+           <div className="flex justify-between items-center mb-10 pb-6 border-b border-slate-50">
+              <h2 className="text-xl font-black font-headline text-[#00216e] uppercase italic tracking-tighter">Abordaje Digital</h2>
+              <span className="bg-emerald-50 text-emerald-600 px-3 py-1 rounded-full text-[9px] font-black uppercase">Validado</span>
+           </div>
+
+           <div className="flex-1 flex flex-col items-center justify-center py-10 bg-slate-50 rounded-[2.5rem] mb-10 border border-slate-100 relative overflow-hidden group">
+              <div className="relative z-10 p-6 bg-white rounded-[2rem] shadow-2xl group-hover:scale-105 transition-transform">
+                 <img 
+                    className="w-44 h-44 object-contain opacity-80" 
+                    alt="QR" 
+                    src={`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${activeTicket.id}`}
+                 />
+              </div>
+              <p className="mt-8 font-black text-[10px] text-slate-300 tracking-[0.4em] uppercase z-10 italic">Ticket ID: {activeTicket.id.slice(-8).toUpperCase()}</p>
+              <div className="absolute top-0 right-0 w-20 h-20 bg-blue-500/5 rounded-full -translate-y-1/2 translate-x-1/2"></div>
+           </div>
+
+           <div className="space-y-6">
+              <div className="flex justify-between items-center">
+                 <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Asiento Selecto</span>
+                 <span className="text-xl font-black text-[#00216e] font-headline"># {activeTicket.asiento}</span>
+              </div>
+              <div className="flex justify-between items-center">
+                 <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Puerta Salida</span>
+                 <span className="text-xl font-black text-blue-500 font-headline uppercase italic">{activeTicket.hora}</span>
+              </div>
+           </div>
+
+           <button className="mt-10 w-full bg-[#00216e] text-white py-6 rounded-3xl font-black text-[10px] uppercase tracking-[0.2em] shadow-xl shadow-blue-900/10 active:scale-95 transition-all flex items-center justify-center gap-3">
+              <span className="material-symbols-outlined text-sm">qr_code_scanner</span>
+              Vincular con App Móvil
+           </button>
         </div>
       </div>
-
-      <div className="bg-surface-container-low rounded-3xl p-2 flex gap-2 w-fit mb-8 shadow-inner">
-        <button 
-          onClick={() => setActiveTab('tracking')}
-          className={`${activeTab === 'tracking' ? 'bg-white text-primary' : 'text-slate-500'} px-8 py-3 rounded-2xl font-bold text-sm shadow-sm transition-all font-headline`}
-        >
-          Seguimiento
-        </button>
-        <button 
-          onClick={() => setActiveTab('history')}
-          className={`${activeTab === 'history' ? 'bg-white text-primary' : 'text-slate-500'} px-8 py-3 rounded-2xl font-bold text-sm transition-all font-headline`}
-        >
-          Historial de Viajes
-        </button>
-      </div>
-
-      {activeTab === 'tracking' ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 text-left">
-          {/* Alert Card */}
-          <div className="bg-error-container/20 p-6 rounded-3xl border border-error-container/30 flex flex-col gap-4">
-            <div className="flex items-center gap-3 text-on-error-container">
-              <span className="material-symbols-outlined text-3xl filled-icon">warning</span>
-              <h3 className="font-headline font-bold">Aviso de Salida</h3>
-            </div>
-            <p className="text-sm text-on-error-container leading-relaxed font-body">El bus está por iniciar el embarque en el Andén 14. Por favor, acérquese a la puerta de salida en los próximos 5 minutos.</p>
-            <div className="mt-auto">
-              <span className="inline-block bg-white/50 text-on-error-container px-3 py-1 rounded-full text-[10px] font-black uppercase font-label">Urgente</span>
-            </div>
-          </div>
-
-          {/* Bus Info Card */}
-          <div className="bg-surface-container-lowest p-6 rounded-3xl shadow-sm border border-slate-100 flex flex-col gap-4">
-            <div className="flex items-center gap-3 text-primary">
-              <span className="material-symbols-outlined text-3xl">directions_bus</span>
-              <h3 className="font-headline font-bold">Unidad Detalles</h3>
-            </div>
-            <div className="space-y-4 font-body">
-                <div className="flex justify-between">
-                    <span className="text-xs text-slate-400 font-bold uppercase">Cooperativa</span>
-                    <span className="text-sm font-bold">Trans. Occidentales</span>
-                </div>
-                <div className="flex justify-between">
-                    <span className="text-xs text-slate-400 font-bold uppercase">Placa</span>
-                    <span className="text-sm font-bold">PBB-2345</span>
-                </div>
-                <div className="flex justify-between">
-                    <span className="text-xs text-slate-400 font-bold uppercase">Conductor</span>
-                    <span className="text-sm font-bold">Carlos M.</span>
-                </div>
-            </div>
-          </div>
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 text-left">
-          {/* Past Trip Cards */}
-          {[
-            { destination: 'Guayaquil - Cuenca', date: '12 Oct 2023', seat: '12', price: '15.00' },
-            { destination: 'Quito - Ibarra', date: '05 Oct 2023', seat: '08', price: '12.50' }
-          ].map((trip, i) => (
-            <div key={i} className="bg-surface-container-lowest p-6 rounded-3xl shadow-sm hover:shadow-md transition-shadow border border-slate-100 cursor-pointer">
-              <div className="flex justify-between items-start mb-6 font-body">
-                <div className="flex gap-3 items-center">
-                  <div className="w-10 h-10 bg-slate-100 rounded-xl flex items-center justify-center">
-                    <span className="material-symbols-outlined text-slate-400">history</span>
-                  </div>
-                  <div>
-                    <h4 className="font-bold text-sm text-on-surface">{trip.destination}</h4>
-                    <p className="text-[10px] text-slate-400 font-bold uppercase">{trip.date}</p>
-                  </div>
-                </div>
-                <span className="material-symbols-outlined text-primary text-lg">chevron_right</span>
-              </div>
-              <div className="flex justify-between items-center text-xs text-slate-500 font-body">
-                <div className="flex items-center gap-1">
-                  <span className="material-symbols-outlined text-sm">event_seat</span>
-                  <span>Asiento {trip.seat}</span>
-                </div>
-                <div className="font-bold text-primary font-headline">${trip.price}</div>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
     </div>
   );
 };

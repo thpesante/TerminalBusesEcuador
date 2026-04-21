@@ -1,510 +1,342 @@
-import React, { useState, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useState, useCallback, useMemo, useEffect } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
+import { db, auth } from '../firebase';
+import { doc, updateDoc, serverTimestamp, getDoc } from 'firebase/firestore';
 
-type SeatStatus = 'available' | 'occupied' | 'restricted';
-type SeatCategory = 'Primera Clase' | 'Ejecutivo' | 'Económica Plus' | 'Económica';
-
-interface Seat {
-  id: string;
-  label: string;
-  row: number;
-  col: 'A' | 'B' | 'C' | 'D';
-  status: SeatStatus;
-  category: SeatCategory;
-  amenities: string[];
-  price: number;
-}
-
+type CellType = 'seat' | 'bathroom' | 'entrance' | 'empty' | 'restricted';
 type FloorType = 'superior' | 'inferior';
 
-const CATEGORY_PRICES: Record<SeatCategory, number> = {
-  'Primera Clase': 145,
-  'Ejecutivo': 95,
-  'Económica Plus': 65,
-  'Económica': 40,
-};
+interface Cell {
+  id: string; // "floor-row-col"
+  label: string;
+  row: number;
+  col: number; // 0, 1, 2, 3 (for V, P, P, V)
+  type: CellType;
+}
 
-const AMENITY_OPTIONS = [
-  { icon: 'bolt', label: 'Corriente' },
-  { icon: 'wifi', label: 'Wi-Fi' },
-  { icon: 'tv', label: 'Pantalla' },
-  { icon: 'airline_seat_recline_extra', label: 'Espacio+' },
-];
-
-const generateDefaultSeats = (rows: number): Seat[] => {
-  const seats: Seat[] = [];
-  for (let r = 1; r <= rows; r++) {
-    (['A', 'B', 'C', 'D'] as const).forEach(col => {
-      seats.push({
-        id: `${r}${col}`,
-        label: `${r}${col}`,
-        row: r,
-        col,
-        status: 'available',
-        category: 'Ejecutivo',
-        amenities: ['bolt'],
-        price: 95,
-      });
-    });
-  }
-  return seats;
-};
-
-const PRESET_CONFIGS = {
-  standard: { rows: 12, name: 'Estándar 2x2', seats: 48 },
-  executive: { rows: 8, name: 'Ejecutivo 2x1', seats: 24 },
-  custom: { rows: 10, name: 'Suite Personalizada', seats: 40 },
-};
+const COLS = [0, 1, 2, 3]; // V, P, P, V layout
 
 const SeatDesigner: React.FC = () => {
   const navigate = useNavigate();
+  const location = useLocation();
+  const unitDataFromState = location.state?.unitData || {};
+
   const [activeFloor, setActiveFloor] = useState<FloorType>('superior');
-  const [selectedSeatId, setSelectedSeatId] = useState<string | null>(null);
-  const [superiorSeats, setSuperiorSeats] = useState<Seat[]>(generateDefaultSeats(12));
-  const [inferiorSeats, setInferiorSeats] = useState<Seat[]>(generateDefaultSeats(6));
-  const [activePreset, setActivePreset] = useState<'standard' | 'executive' | 'custom'>('standard');
+  const [selectedCellIds, setSelectedCellIds] = useState<string[]>([]);
+  const [draggedType, setDraggedType] = useState<CellType | null>(null);
+  const [numberingDirection, setNumberingDirection] = useState<'LTR' | 'RTL'>('LTR');
 
-  const seats = activeFloor === 'superior' ? superiorSeats : inferiorSeats;
-  const setSeats = activeFloor === 'superior' ? setSuperiorSeats : setInferiorSeats;
-
-  const selectedSeat = seats.find(s => s.id === selectedSeatId) ?? null;
-  const rows = Array.from(new Set(seats.map(s => s.row))).sort((a, b) => a - b);
-  const maxRow = rows.length > 0 ? Math.max(...rows) : 0;
-
-  const updateSeat = useCallback((id: string, changes: Partial<Seat>) => {
-    setSeats(prev => prev.map(s => s.id === id ? { ...s, ...changes } : s));
-  }, [setSeats]);
-
-  const toggleAmenity = (amenity: string) => {
-    if (!selectedSeat) return;
-    const has = selectedSeat.amenities.includes(amenity);
-    updateSeat(selectedSeat.id, {
-      amenities: has
-        ? selectedSeat.amenities.filter(a => a !== amenity)
-        : [...selectedSeat.amenities, amenity],
-    });
+  // Initialize Grids
+  const createEmptyGrid = (rows: number, floor: FloorType) => {
+    const grid: Record<string, Cell> = {};
+    for (let r = 1; r <= rows; r++) {
+      COLS.forEach(c => {
+        const id = `${floor}-${r}-${c}`;
+        grid[id] = { id, label: '', row: r, col: c, type: 'seat' };
+      });
+    }
+    return grid;
   };
 
-  const addRow = () => {
-    const newRow = maxRow + 1;
-    const newSeats: Seat[] = (['A', 'B', 'C', 'D'] as const).map(col => ({
-      id: `${newRow}${col}`,
-      label: `${newRow}${col}`,
-      row: newRow,
-      col,
-      status: 'available',
-      category: 'Ejecutivo',
-      amenities: ['bolt'],
-      price: 95,
-    }));
-    setSeats(prev => [...prev, ...newSeats]);
-  };
+  const [superiorGrid, setSuperiorGrid] = useState(createEmptyGrid(12, 'superior'));
+  const [inferiorGrid, setInferiorGrid] = useState(createEmptyGrid(6, 'inferior'));
+  const [unitData, setUnitData] = useState(unitDataFromState);
 
-  const removeLastRow = () => {
-    if (maxRow <= 1) return;
-    setSeats(prev => prev.filter(s => s.row !== maxRow));
-    if (selectedSeat && selectedSeat.row === maxRow) setSelectedSeatId(null);
-  };
+  // Load from DB if possible
+  useEffect(() => {
+    const loadDraft = async () => {
+      const draftId = location.state?.draftId || `temp_${auth.currentUser?.uid}`;
+      try {
+        const snap = await getDoc(doc(db, 'units_draft', draftId));
+        if (snap.exists()) {
+          const data = snap.data();
+          if (data.grids) {
+            setSuperiorGrid(data.grids.superior);
+            setInferiorGrid(data.grids.inferior);
+          }
+          if (data) setUnitData(data);
+        }
+      } catch (err) { console.error("Error loading typography:", err); }
+    };
+    loadDraft();
+  }, []);
 
+  const grid = activeFloor === 'superior' ? superiorGrid : inferiorGrid;
+  const setGrid = activeFloor === 'superior' ? setSuperiorGrid : setInferiorGrid;
+
+  const getColLabel = (col: number) => ['V', 'P', 'P', 'V'][col];
+
+  // Helper to re-number only 'seat' types with direction support
   const autoNumber = () => {
-    setSeats(prev => {
-      const sorted = [...prev].sort((a, b) => a.row - b.row || a.col.localeCompare(b.col));
-      return sorted.map(s => ({ ...s, label: `${s.row}${s.col}` }));
+    const renumber = (currentGrid: Record<string, Cell>, start: number) => {
+      let n = start;
+      const sortedKeys = Object.keys(currentGrid).sort((a,b) => {
+        const [, rA, cA] = a.split('-').map(Number);
+        const [, rB, cB] = b.split('-').map(Number);
+        if (rA !== rB) return rA - rB;
+        // Direction logic
+        return numberingDirection === 'LTR' ? cA - cB : cB - cA;
+      });
+      const nextGrid = { ...currentGrid };
+      sortedKeys.forEach(k => {
+        if (nextGrid[k].type === 'seat') {
+          nextGrid[k] = { ...nextGrid[k], label: `${n++}` };
+        } else {
+          nextGrid[k] = { ...nextGrid[k], label: '' };
+        }
+      });
+      return { nextGrid, lastNum: n };
+    };
+
+    setSuperiorGrid(prev => {
+        const res = renumber(prev, 1);
+        setInferiorGrid(infPrev => renumber(infPrev, res.lastNum).nextGrid);
+        return res.nextGrid;
     });
   };
 
-  const applyCategoryToAll = (category: SeatCategory) => {
-    setSeats(prev => prev.map(s => ({ ...s, category, price: CATEGORY_PRICES[category] })));
+  const toggleSelect = (id: string, multi: boolean) => {
+    if (multi) {
+      setSelectedCellIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
+    } else {
+      setSelectedCellIds([id]);
+    }
   };
 
-  const applyPreset = (preset: 'standard' | 'executive' | 'custom') => {
-    setActivePreset(preset);
-    const config = PRESET_CONFIGS[preset];
-    setSuperiorSeats(generateDefaultSeats(config.rows));
-    setInferiorSeats(generateDefaultSeats(Math.floor(config.rows / 2)));
-    setSelectedSeatId(null);
+  const deleteSelected = () => {
+    setGrid(prev => {
+      const next = { ...prev };
+      selectedCellIds.forEach(id => {
+        if (next[id]) next[id] = { ...next[id], type: 'empty', label: '' };
+      });
+      return next;
+    });
+    setSelectedCellIds([]);
   };
 
-  const statusColor = (s: Seat, isSelected: boolean) => {
-    if (isSelected) return 'bg-[#3755c3] text-white ring-4 ring-[#3755c3]/20 scale-105 shadow-lg';
-    if (s.status === 'occupied') return 'bg-[#191c1e] text-white cursor-pointer hover:opacity-80';
-    if (s.status === 'restricted') return 'bg-[#d8dadc] text-[#76777d] cursor-not-allowed';
-    return 'bg-[#d0e1fb] text-[#3755c3] cursor-pointer hover:bg-[#3755c3] hover:text-white';
+  const deleteRow = (rowNum: number) => {
+    setGrid(prev => {
+      const next = { ...prev };
+      COLS.forEach(c => {
+        const id = `${activeFloor}-${rowNum}-${c}`;
+        if (next[id]) next[id] = { ...next[id], type: 'empty', label: '' };
+      });
+      return next;
+    });
   };
 
-  const cycleStatus = (seat: Seat) => {
-    const cycle: SeatStatus[] = ['available', 'occupied', 'restricted'];
-    const next = cycle[(cycle.indexOf(seat.status) + 1) % cycle.length];
-    updateSeat(seat.id, { status: next });
+  const handleDrop = (id: string) => {
+    if (!draggedType) return;
+    setGrid(prev => ({
+      ...prev,
+      [id]: { ...prev[id], type: draggedType, label: '' }
+    }));
+    setDraggedType(null);
   };
 
-  const occupied = seats.filter(s => s.status === 'occupied').length;
-  const total = seats.length;
+  const handleFinalize = async () => {
+    const draftId = location.state?.draftId || `temp_${auth.currentUser?.uid}`;
+    try {
+        const draftRef = doc(db, 'units_draft', draftId);
+        
+        // Si es Normal, solo guardamos el superior (Cabina Única)
+        const finalGrids = unitData.busType === 'Normal' 
+            ? { superior: superiorGrid, inferior: {} }
+            : { superior: superiorGrid, inferior: inferiorGrid };
+
+        await updateDoc(draftRef, {
+            grids: finalGrids,
+            status: 'topography_complete',
+            updatedAt: serverTimestamp()
+        });
+        
+        navigate('/unit-confirmation', { 
+          state: { 
+            draftId,
+            unitData, 
+            grids: finalGrids 
+          } 
+        });
+    } catch (err) {
+        console.error("Error al guardar topografía:", err);
+        alert("Error al sincronizar con la nube.");
+    }
+  };
+
+  const rowIndices = useMemo(() => {
+    const indices = Array.from(new Set(Object.values(grid).map(c => c.row))).sort((a,b) => a - b);
+    return indices;
+  }, [grid]);
 
   return (
-    <div className="flex flex-col h-screen bg-[#f7f9fb] text-[#191c1e] font-body text-left overflow-hidden">
-      {/* Header */}
-      <header className="flex-shrink-0 flex justify-between items-center px-6 py-3 bg-[#f7f9fb] border-b border-slate-200 z-40">
-        <div className="flex items-center gap-4 min-w-0">
-          <button
-            onClick={() => navigate('/unit-registration')}
-            className="p-2 rounded-xl text-[#45464d] hover:bg-[#eceef0] transition-all flex-shrink-0"
-          >
-            <span className="material-symbols-outlined">arrow_back</span>
-          </button>
-          <div className="min-w-0">
-            <h1 className="text-base font-black text-[#191c1e] truncate">Constructor de Asientos</h1>
-            <p className="text-[10px] font-bold text-[#45464d] uppercase tracking-widest truncate">Volvo B11R Premium • {total} asientos</p>
-          </div>
+    <div className="flex flex-col h-screen bg-[#f8fafc] text-[#0f172a] font-body overflow-hidden">
+      <header className="flex-shrink-0 px-10 py-6 bg-white border-b border-slate-100 flex justify-between items-center z-50 shadow-sm">
+        <div className="flex items-center gap-6">
+           <button onClick={() => navigate('/unit-registration')} className="w-10 h-10 rounded-full hover:bg-slate-50 flex items-center justify-center text-slate-400">
+              <span className="material-symbols-outlined">arrow_back</span>
+           </button>
+           <div>
+              <h1 className="text-xl font-black tracking-tighter italic text-[#00216e]">CONSTRUCTOR DE TOPOLOGÍA</h1>
+              <p className="text-[9px] font-black uppercase tracking-[0.3em] text-slate-400 mt-1">{unitData.marca} {unitData.modelo} • {unitData.placa}</p>
+           </div>
         </div>
 
-        <div className="flex items-center gap-3 flex-shrink-0">
-          {/* Floor Toggle */}
-          <div className="flex gap-1 bg-[#e6e8ea] p-1 rounded-xl">
-            {(['superior', 'inferior'] as FloorType[]).map(floor => (
-              <button
-                key={floor}
-                onClick={() => { setActiveFloor(floor); setSelectedSeatId(null); }}
-                className={`px-4 py-1.5 text-[10px] font-black uppercase tracking-wider rounded-lg transition-all ${activeFloor === floor ? 'bg-white text-[#191c1e] shadow-sm' : 'text-[#45464d]'}`}
-              >
-                Piso {floor === 'superior' ? 'Superior' : 'Inferior'}
-              </button>
-            ))}
-          </div>
-
-          <button
-            onClick={() => navigate('/unit-confirmation')}
-            className="flex items-center gap-2 bg-[#3755c3] text-white px-5 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-[#001453] transition-all shadow-lg shadow-[#3755c3]/20 active:scale-95"
-          >
-            Finalizar Unidad
-            <span className="material-symbols-outlined text-sm">arrow_forward</span>
-          </button>
+        <div className="flex items-center gap-6">
+           {unitData.busType === 'Dos Pisos' ? (
+              <div className="flex bg-slate-100 p-1 rounded-2xl shadow-inner">
+                 <button onClick={() => setActiveFloor('superior')} className={`px-6 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${activeFloor === 'superior' ? 'bg-white text-[#3755c3] shadow-sm' : 'text-slate-400'}`}>SEGUNDO PISO</button>
+                 <button onClick={() => setActiveFloor('inferior')} className={`px-6 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${activeFloor === 'inferior' ? 'bg-white text-[#3755c3] shadow-sm' : 'text-slate-400'}`}>PRIMER PISO</button>
+              </div>
+           ) : (
+              <div className="bg-slate-100 px-6 py-2 rounded-xl">
+                 <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest italic">UNIDAD DE PISO ÚNICO</span>
+              </div>
+           )}
+           <button onClick={handleFinalize} className="bg-[#00216e] text-white px-10 py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:scale-105 active:scale-95 shadow-xl shadow-blue-900/10 transition-all">Sincronizar y Siguiente</button>
         </div>
       </header>
 
-      {/* Body */}
       <div className="flex flex-1 overflow-hidden">
-
-        {/* LEFT PANEL: Presets & Tools */}
-        <aside className="w-56 flex-shrink-0 bg-[#f2f4f6] border-r border-slate-200 flex flex-col overflow-y-auto">
-          <div className="p-4 space-y-6">
-            {/* Presets */}
-            <div>
-              <h3 className="text-[9px] font-black uppercase tracking-[0.2em] text-[#45464d] mb-3">Plantillas</h3>
-              <div className="space-y-2">
-                {(Object.entries(PRESET_CONFIGS) as [keyof typeof PRESET_CONFIGS, typeof PRESET_CONFIGS[keyof typeof PRESET_CONFIGS]][]).map(([key, cfg]) => (
-                  <button
-                    key={key}
-                    onClick={() => applyPreset(key)}
-                    className={`w-full p-3 text-left rounded-xl transition-all border ${activePreset === key ? 'bg-white border-[#3755c3]/40 shadow-md shadow-[#3755c3]/10' : 'bg-white border-slate-100 hover:border-slate-200'}`}
-                  >
-                    <p className={`text-xs font-black mb-1 ${activePreset === key ? 'text-[#3755c3]' : 'text-[#191c1e]'}`}>{cfg.name}</p>
-                    <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">{cfg.seats} Asientos</p>
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Row Controls */}
-            <div>
-              <h3 className="text-[9px] font-black uppercase tracking-[0.2em] text-[#45464d] mb-3">Filas ({maxRow} actuales)</h3>
-              <div className="flex gap-2">
-                <button
-                  onClick={addRow}
-                  className="flex-1 flex items-center justify-center gap-1 py-2.5 bg-white border border-slate-200 rounded-xl text-[10px] font-black hover:bg-[#eceef0] transition-all"
-                >
-                  <span className="material-symbols-outlined text-sm text-[#3755c3]">add</span>
-                  Fila
-                </button>
-                <button
-                  onClick={removeLastRow}
-                  disabled={maxRow <= 1}
-                  className="flex-1 flex items-center justify-center gap-1 py-2.5 bg-white border border-slate-200 rounded-xl text-[10px] font-black hover:bg-[#ba1a1a]/5 hover:text-[#ba1a1a] hover:border-[#ba1a1a]/20 transition-all disabled:opacity-30 disabled:cursor-not-allowed"
-                >
-                  <span className="material-symbols-outlined text-sm">remove</span>
-                  Fila
-                </button>
-              </div>
-            </div>
-
-            {/* Tools */}
-            <div>
-              <h3 className="text-[9px] font-black uppercase tracking-[0.2em] text-[#45464d] mb-3">Herramientas</h3>
-              <div className="space-y-2">
-                <button
-                  onClick={autoNumber}
-                  className="w-full flex items-center gap-2 p-3 bg-white rounded-xl text-[10px] font-black hover:bg-[#eceef0] border border-slate-100 transition-all"
-                >
-                  <span className="material-symbols-outlined text-sm">format_list_numbered</span>
-                  Auto-numeración
-                </button>
-                <button
-                  onClick={() => setSeats(prev => prev.map(s => ({ ...s, status: 'available' })))}
-                  className="w-full flex items-center gap-2 p-3 bg-white rounded-xl text-[10px] font-black hover:bg-[#eceef0] border border-slate-100 transition-all"
-                >
-                  <span className="material-symbols-outlined text-sm">refresh</span>
-                  Limpiar Estados
-                </button>
-              </div>
-            </div>
-
-            {/* Legend */}
-            <div>
-              <h3 className="text-[9px] font-black uppercase tracking-[0.2em] text-[#45464d] mb-3">Leyenda</h3>
-              <div className="space-y-2">
-                {[
-                  { color: 'bg-[#d0e1fb]', label: 'Disponible' },
-                  { color: 'bg-[#191c1e]', label: 'Ocupado' },
-                  { color: 'bg-[#3755c3]', label: 'Seleccionado' },
-                  { color: 'bg-[#d8dadc]', label: 'Restringido' },
-                ].map(l => (
-                  <div key={l.label} className="flex items-center gap-2">
-                    <div className={`w-4 h-4 rounded-md flex-shrink-0 ${l.color}`}></div>
-                    <span className="text-[10px] font-bold text-[#45464d]">{l.label}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-
-          {/* Capacity Bar */}
-          <div className="mt-auto p-4 bg-[#eceef0] border-t border-slate-200">
-            <div className="flex justify-between mb-2">
-              <span className="text-[10px] font-black text-[#45464d] uppercase tracking-wider">Capacidad</span>
-              <span className="text-[10px] font-black">{occupied} / {total}</span>
-            </div>
-            <div className="w-full bg-white h-2.5 rounded-full overflow-hidden shadow-inner">
-              <div
-                className="bg-[#3755c3] h-full rounded-full transition-all duration-500"
-                style={{ width: total > 0 ? `${(occupied / total) * 100}%` : '0%' }}
-              />
-            </div>
-            <p className="text-[9px] font-bold text-slate-400 mt-1 text-right">{total - occupied} disponibles</p>
-          </div>
-        </aside>
-
-        {/* CENTER: Seat Canvas */}
-        <div className="flex-1 overflow-auto bg-[#f8f9fa] flex justify-center p-6">
-          <div className="w-full max-w-2xl">
-            {/* Bus Frame */}
-            <div className="relative bg-white rounded-[2rem] shadow-[0_8px_40px_-8px_rgba(0,0,0,0.15)] border border-slate-100 p-6">
-              {/* Driver Row */}
-              <div className="flex items-center gap-2 mb-6 pb-4 border-b border-[#f2f4f6]">
-                <div className="w-12 h-12 rounded-2xl bg-[#f2f4f6] flex items-center justify-center flex-shrink-0">
-                  <span className="material-symbols-outlined text-[#45464d]">steering_wheel</span>
-                </div>
-                <div className="flex-1 h-px bg-[#f2f4f6]"></div>
-                <div className="text-[9px] font-black text-slate-300 uppercase tracking-[0.3em]">
-                  Piso {activeFloor === 'superior' ? 'Superior' : 'Inferior'}
-                </div>
-              </div>
-
-              {/* Seats Grid */}
-              <div className="space-y-2">
-                {/* Column headers */}
-                <div className="grid grid-cols-[2rem_1fr_1fr_2rem_1fr_1fr] gap-2 mb-1">
-                  <div></div>
-                  <div className="text-center text-[9px] font-black text-slate-300 uppercase">A</div>
-                  <div className="text-center text-[9px] font-black text-slate-300 uppercase">B</div>
-                  <div></div>
-                  <div className="text-center text-[9px] font-black text-slate-300 uppercase">C</div>
-                  <div className="text-center text-[9px] font-black text-slate-300 uppercase">D</div>
-                </div>
-
-                {rows.map(row => {
-                  const rowSeats = seats.filter(s => s.row === row);
-                  const getS = (col: 'A' | 'B' | 'C' | 'D') => rowSeats.find(s => s.col === col);
-                  return (
-                    <div key={row} className="grid grid-cols-[2rem_1fr_1fr_2rem_1fr_1fr] gap-2 items-center">
-                      {/* Row number */}
-                      <div className="text-[10px] font-black text-slate-300 text-center">{row}</div>
-
-                      {/* Seats A & B */}
-                      {(['A', 'B'] as const).map(col => {
-                        const s = getS(col);
-                        if (!s) return <div key={col} className="h-10 rounded-xl bg-[#f2f4f6] border-2 border-dashed border-slate-200 flex items-center justify-center cursor-pointer hover:border-[#3755c3] transition-all" onClick={() => {/* add seat */}} />;
-                        const isSelected = selectedSeatId === s.id;
-                        return (
-                          <button
-                            key={col}
-                            onClick={() => setSelectedSeatId(isSelected ? null : s.id)}
-                            onContextMenu={e => { e.preventDefault(); cycleStatus(s); }}
-                            title="Click: seleccionar | Click derecho: cambiar estado"
-                            className={`h-10 rounded-xl text-[11px] font-black transition-all duration-150 ${statusColor(s, isSelected)}`}
-                          >
-                            {s.label}
-                          </button>
-                        );
-                      })}
-
-                      {/* Aisle */}
-                      <div className="h-3 flex items-center justify-center">
-                        <div className="w-1 h-full bg-[#f2f4f6] rounded-full mx-auto"></div>
-                      </div>
-
-                      {/* Seats C & D */}
-                      {(['C', 'D'] as const).map(col => {
-                        const s = getS(col);
-                        if (!s) return <div key={col} className="h-10 rounded-xl bg-[#f2f4f6] border-2 border-dashed border-slate-200" />;
-                        const isSelected = selectedSeatId === s.id;
-                        return (
-                          <button
-                            key={col}
-                            onClick={() => setSelectedSeatId(isSelected ? null : s.id)}
-                            onContextMenu={e => { e.preventDefault(); cycleStatus(s); }}
-                            title="Click: seleccionar | Click derecho: cambiar estado"
-                            className={`h-10 rounded-xl text-[11px] font-black transition-all duration-150 ${statusColor(s, isSelected)}`}
-                          >
-                            {s.label}
-                          </button>
-                        );
-                      })}
+        <aside className="w-72 bg-white border-r border-slate-100 p-8 flex flex-col gap-8 overflow-y-auto">
+           <div>
+              <h3 className="text-[10px] font-black text-[#00216e] uppercase tracking-[0.3em] mb-8 italic">Paleta de Arrastre</h3>
+              <div className="grid grid-cols-2 gap-4">
+                 {[
+                   { type: 'bathroom', icon: 'wc', label: 'BAÑO', color: 'amber' },
+                   { type: 'entrance', icon: 'login', label: 'ENTRADA', color: 'emerald' },
+                   { type: 'restricted', icon: 'block', label: 'BLOQUEAR', color: 'slate' },
+                   { type: 'seat', icon: 'event_seat', label: 'ASIENTO', color: 'blue' }
+                 ].map(item => (
+                    <div key={item.type} draggable onDragStart={() => setDraggedType(item.type as CellType)} className="cursor-grab active:cursor-grabbing group">
+                       <div className={`aspect-square rounded-3xl bg-slate-50 border-2 border-transparent group-hover:border-${item.color}-200 group-hover:bg-${item.color}-50 flex flex-col items-center justify-center gap-2 transition-all`}>
+                          <span className={`material-symbols-outlined text-${item.color}-500 text-3xl transition-transform group-hover:scale-110`}>{item.icon}</span>
+                          <span className="text-[9px] font-black uppercase tracking-widest opacity-40">{item.label}</span>
+                       </div>
                     </div>
-                  );
-                })}
-
-                {/* Add Row Button inline */}
-                <button
-                  onClick={addRow}
-                  className="w-full mt-3 py-3 rounded-xl border-2 border-dashed border-slate-200 text-[10px] font-black text-slate-300 uppercase tracking-widest hover:border-[#3755c3] hover:text-[#3755c3] transition-all flex items-center justify-center gap-2"
-                >
-                  <span className="material-symbols-outlined text-base">add</span>
-                  Agregar Fila
-                </button>
+                 ))}
               </div>
+           </div>
 
-              {/* Tip */}
-              <p className="text-center text-[9px] text-slate-300 font-bold uppercase tracking-widest mt-4">
-                Click → Seleccionar &nbsp;|&nbsp; Click Derecho → Cambiar Estado
-              </p>
-            </div>
-          </div>
-        </div>
-
-        {/* RIGHT PANEL: Properties */}
-        <aside className="w-64 flex-shrink-0 bg-[#f2f4f6] border-l border-slate-200 flex flex-col overflow-y-auto">
-          {selectedSeat ? (
-            <div className="p-4 space-y-6 flex-1">
-              {/* Header chip */}
-              <div className="flex items-center justify-between">
-                <h3 className="text-[9px] font-black uppercase tracking-[0.2em] text-[#45464d]">Propiedades</h3>
-                <span className="text-[9px] font-black bg-[#3755c3] text-white px-2.5 py-1 rounded-full uppercase">
-                  Asiento {selectedSeat.label}
-                </span>
-              </div>
-
-              {/* Label */}
-              <div className="space-y-1.5">
-                <label className="text-[9px] font-black uppercase tracking-widest text-[#45464d]">Etiqueta</label>
-                <input
-                  className="w-full bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-[#3755c3] focus:border-transparent text-sm font-black p-3 outline-none transition-all"
-                  value={selectedSeat.label}
-                  onChange={e => updateSeat(selectedSeat.id, { label: e.target.value })}
-                />
-              </div>
-
-              {/* Status */}
-              <div className="space-y-1.5">
-                <label className="text-[9px] font-black uppercase tracking-widest text-[#45464d]">Estado</label>
-                <div className="flex gap-1.5 flex-wrap">
-                  {(['available', 'occupied', 'restricted'] as SeatStatus[]).map(st => (
-                    <button
-                      key={st}
-                      onClick={() => updateSeat(selectedSeat.id, { status: st })}
-                      className={`px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-wider transition-all ${selectedSeat.status === st
-                        ? st === 'available' ? 'bg-[#3755c3] text-white' : st === 'occupied' ? 'bg-[#191c1e] text-white' : 'bg-[#d8dadc] text-[#45464d]'
-                        : 'bg-white border border-slate-200 text-[#45464d]'
-                      }`}
-                    >
-                      {st === 'available' ? 'Libre' : st === 'occupied' ? 'Ocupado' : 'Restringido'}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Category */}
-              <div className="space-y-1.5">
-                <label className="text-[9px] font-black uppercase tracking-widest text-[#45464d]">Categoría</label>
-                <select
-                  className="w-full bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-[#3755c3] text-xs font-black p-3 outline-none appearance-none transition-all"
-                  value={selectedSeat.category}
-                  onChange={e => {
-                    const cat = e.target.value as SeatCategory;
-                    updateSeat(selectedSeat.id, { category: cat, price: CATEGORY_PRICES[cat] });
-                  }}
-                >
-                  {(Object.keys(CATEGORY_PRICES) as SeatCategory[]).map(cat => (
-                    <option key={cat} value={cat}>{cat}</option>
-                  ))}
-                </select>
-              </div>
-
-              {/* Amenities */}
-              <div className="space-y-2">
-                <label className="text-[9px] font-black uppercase tracking-widest text-[#45464d]">Amenidades</label>
-                <div className="grid grid-cols-2 gap-1.5">
-                  {AMENITY_OPTIONS.map(({ icon, label }) => {
-                    const active = selectedSeat.amenities.includes(icon);
-                    return (
-                      <button
-                        key={icon}
-                        onClick={() => toggleAmenity(icon)}
-                        className={`flex items-center gap-1.5 p-2.5 rounded-xl text-[9px] font-black uppercase tracking-tight transition-all border ${active ? 'bg-[#191c1e] text-white border-[#191c1e]' : 'bg-white text-[#45464d] border-slate-200 hover:border-[#3755c3]'}`}
-                      >
-                        <span className="material-symbols-outlined text-sm">{icon}</span>
-                        {label}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-
-              {/* Price */}
-              <div className="space-y-1.5">
-                <label className="text-[9px] font-black uppercase tracking-widest text-[#45464d]">Precio Base</label>
-                <div className="flex items-center bg-white border border-slate-200 rounded-xl overflow-hidden focus-within:ring-2 focus-within:ring-[#3755c3] transition-all">
-                  <span className="px-3 text-[#3755c3] font-black text-sm">$</span>
-                  <input
-                    type="number"
-                    className="flex-1 p-3 text-sm font-black outline-none border-none bg-transparent"
-                    value={selectedSeat.price}
-                    onChange={e => updateSeat(selectedSeat.id, { price: Number(e.target.value) })}
-                    min={0}
-                  />
-                </div>
-              </div>
-
-              {/* Apply to all of category */}
-              <button
-                onClick={() => applyCategoryToAll(selectedSeat.category)}
-                className="w-full bg-[#001453] text-white py-3 rounded-xl font-black text-[9px] uppercase tracking-widest hover:bg-[#3755c3] transition-all shadow-lg"
+           <div className="space-y-4">
+              <h3 className="text-[10px] font-black text-[#00216e] uppercase tracking-[0.3em] mb-4 italic">Sentido de Enumeración</h3>
+              <button 
+                onClick={() => setNumberingDirection(prev => prev === 'LTR' ? 'RTL' : 'LTR')}
+                className="w-full py-4 bg-slate-50 border border-slate-100 rounded-2xl flex items-center justify-center gap-3 hover:bg-slate-100 transition-all"
               >
-                Aplicar categoría a todos
+                <span className="material-symbols-outlined text-[#00216e]">{numberingDirection === 'LTR' ? 'east' : 'west'}</span>
+                <span className="text-[10px] font-black uppercase tracking-widest text-[#00216e]">GIRAR: {numberingDirection === 'LTR' ? 'IZQ → DER' : 'DER → IZQ'}</span>
               </button>
-            </div>
-          ) : (
-            <div className="flex-1 flex flex-col items-center justify-center p-6 text-center">
-              <div className="w-16 h-16 bg-[#eceef0] rounded-2xl flex items-center justify-center mb-4">
-                <span className="material-symbols-outlined text-3xl text-slate-300">event_seat</span>
-              </div>
-              <p className="text-xs font-black text-[#45464d] uppercase tracking-wider mb-2">Sin Selección</p>
-              <p className="text-[10px] text-slate-400 font-medium leading-relaxed">
-                Haz clic en cualquier asiento para editar sus propiedades.
-              </p>
-            </div>
-          )}
+              
+              <button 
+                onClick={autoNumber}
+                className="w-full py-4 bg-[#00216e] text-white rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-lg shadow-blue-900/10 hover:bg-black transition-all flex items-center justify-center gap-2"
+              >
+                <span className="material-symbols-outlined text-sm">format_list_numbered</span>
+                Auto-Enumerar
+              </button>
+           </div>
 
-          {/* Info panel */}
-          <div className="p-4 bg-[#001453] m-4 rounded-2xl text-white flex-shrink-0">
-            <div className="flex items-center gap-2 mb-2">
-              <span className="material-symbols-outlined text-sm">info</span>
-              <span className="text-[9px] font-black uppercase tracking-widest">Consejo</span>
-            </div>
-            <p className="text-[10px] leading-relaxed opacity-80 font-medium">
-              <strong>Click derecho</strong> en un asiento para cambiar su estado rápidamente.
-            </p>
-          </div>
+           <div className="space-y-4">
+              <h3 className="text-[10px] font-black text-[#00216e] uppercase tracking-[0.3em] mb-4 italic">Selección Múltiple</h3>
+              <button 
+                onClick={deleteSelected}
+                disabled={selectedCellIds.length === 0}
+                className="w-full py-4 bg-red-50 text-red-600 rounded-2xl font-black text-[10px] uppercase tracking-widest border border-red-100 hover:bg-red-600 hover:text-white transition-all disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              >
+                <span className="material-symbols-outlined text-sm">delete</span>
+                Borrar {selectedCellIds.length} ítems
+              </button>
+           </div>
         </aside>
+
+        <main className="flex-1 bg-slate-50/50 p-12 overflow-y-auto">
+           <div className="max-w-3xl mx-auto">
+              <div className="bg-white rounded-[4rem] shadow-2xl p-12 relative border border-white">
+                 <div className="flex items-center justify-between mb-16 pb-10 border-b border-slate-50">
+                    <div className="flex items-center gap-6">
+                       <div className="w-20 h-20 bg-slate-50 rounded-[2rem] flex items-center justify-center text-slate-300 shadow-inner">
+                          <span className="material-symbols-outlined text-4xl">steering_wheel</span>
+                       </div>
+                       <div>
+                          <p className="text-[10px] font-black text-slate-300 uppercase tracking-[0.4em] mb-1 italic">Ventanilla de Mando</p>
+                          <p className="text-xl font-black text-[#00216e] uppercase tracking-tighter">
+                            {unitData.busType === 'Normal' ? 'CABINA ÚNICA' : activeFloor === 'superior' ? 'SEGUNDO PISO' : 'PRIMER PISO'}
+                          </p>
+                       </div>
+                    </div>
+                    <div className="text-right">
+                       <p className="text-[10px] font-black text-slate-200 uppercase tracking-widest">Capacidad Actual</p>
+                       <p className="text-4xl font-black text-[#00216e] tracking-tighter">
+                        {
+                          unitData.busType === 'Dos Pisos' 
+                          ? Object.values(superiorGrid).filter(c => c.type === 'seat').length + Object.values(inferiorGrid).filter(c => c.type === 'seat').length
+                          : Object.values(superiorGrid).filter(c => c.type === 'seat').length
+                        }
+                       </p>
+                    </div>
+                 </div>
+
+                 <div className="grid grid-cols-[3rem_1fr_1fr_3rem_1fr_1fr] gap-4 mb-8">
+                    <div></div>
+                    {['V','P','','P','V'].map((l, i) => <div key={i} className="text-center text-[10px] font-black text-slate-400 uppercase tracking-widest">{l}</div>)}
+                 </div>
+
+                 <div className="space-y-4">
+                    {rowIndices.map(r => (
+                       <div key={r} className="grid grid-cols-[3rem_1fr_1fr_3rem_1fr_1fr] gap-4 items-center group/row">
+                          <div className="flex flex-col items-center justify-center gap-1 group/btn">
+                             <span className="text-[9px] font-black text-slate-200 uppercase tracking-tighter">{r}</span>
+                             <button onClick={() => deleteRow(r)} className="w-8 h-8 rounded-lg bg-red-50 text-red-400 hover:bg-red-600 hover:text-white transition-all flex items-center justify-center shadow-sm opacity-0 group-hover/row:opacity-100">
+                                <span className="material-symbols-outlined text-sm">delete_sweep</span>
+                             </button>
+                          </div>
+
+                          {[0, 1, 'aisle', 2, 3].map(c => {
+                             if (c === 'aisle') return <div key="aisle" className="flex justify-center h-full"><div className="w-1.5 h-full bg-slate-50/80 rounded-full"></div></div>;
+                             const cell = grid[`${activeFloor}-${r}-${c}`];
+                             const isSelected = selectedCellIds.includes(cell.id);
+                             return (
+                                <div 
+                                  key={c}
+                                  onDragOver={(e) => e.preventDefault()}
+                                  onDrop={() => handleDrop(cell.id)}
+                                  onClick={(e) => toggleSelect(cell.id, e.shiftKey || e.metaKey || e.ctrlKey)}
+                                  className={`aspect-[4/3] rounded-2xl border-2 transition-all flex items-center justify-center cursor-pointer relative overflow-hidden
+                                    ${cell.type === 'empty' ? 'bg-slate-50/50 border-dashed border-slate-100' : ''}
+                                    ${cell.type === 'seat' ? 'bg-white border-[#3755c3]/20 hover:border-[#3755c3]' : ''}
+                                    ${cell.type === 'bathroom' ? 'bg-amber-100 border-amber-200' : ''}
+                                    ${cell.type === 'entrance' ? 'bg-emerald-100 border-emerald-200' : ''}
+                                    ${cell.type === 'restricted' ? 'bg-slate-200 border-slate-300' : ''}
+                                    ${isSelected ? 'border-[#00216e] bg-[#00216e] text-white shadow-xl scale-105 z-10' : ''}
+                                  `}
+                                >
+                                   {cell.type === 'seat' && <span className={`text-md font-black ${isSelected ? 'text-white' : 'text-[#00216e]'}`}>{cell.label}</span>}
+                                   {cell.type === 'bathroom' && <span className="material-symbols-outlined text-amber-600 font-bold">wc</span>}
+                                   {cell.type === 'entrance' && <span className="material-symbols-outlined text-emerald-600 font-bold">login</span>}
+                                   {cell.type === 'restricted' && <span className="material-symbols-outlined text-slate-400 text-sm">block</span>}
+                                </div>
+                             );
+                          })}
+                       </div>
+                    ))}
+                 </div>
+
+                 <button onClick={() => {
+                        const newR = Math.max(...rowIndices) + 1;
+                        setGrid(prev => {
+                            const next = { ...prev };
+                            COLS.forEach(c => {
+                                const id = `${activeFloor}-${newR}-${c}`;
+                                next[id] = { id, label: '', row: newR, col: c, type: 'seat' };
+                            });
+                            return next;
+                        });
+                    }} className="w-full mt-12 py-8 rounded-[2.5rem] border-2 border-dashed border-slate-100 text-slate-200 font-black text-[10px] uppercase tracking-[0.4em] hover:text-[#3755c3] hover:border-[#3755c3] transition-all">
+                    ANEXAR FILA ESTRUCTURAL
+                 </button>
+              </div>
+           </div>
+        </main>
       </div>
     </div>
   );

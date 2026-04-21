@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { auth, db } from '../firebase';
+import { auth, db, isDemoMode } from '../firebase';
 import { signOut, onAuthStateChanged } from 'firebase/auth';
 import { doc, getDoc } from 'firebase/firestore';
 
@@ -28,6 +28,13 @@ const Dashboard = () => {
   }, [location.state]);
   
   useEffect(() => {
+    if (isDemoMode) {
+      setUser({ uid: 'demo-user', email: 'demo@transporte-ecuador.com' });
+      setUserName('Pedro - Audit Mode');
+      setIsLoading(false);
+      return;
+    }
+
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       if (user) {
         setUser(user);
@@ -52,7 +59,9 @@ const Dashboard = () => {
 
   const handleLogout = async () => {
     try {
-      await signOut(auth);
+      if (!isDemoMode) {
+        await signOut(auth);
+      }
       navigate('/');
     } catch (error) {
       console.error("Error al cerrar sesión:", error);
