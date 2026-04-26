@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { db } from '../../firebase';
-import { collection, onSnapshot, query, orderBy, doc, updateDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, onSnapshot, query, orderBy, doc, updateDoc, addDoc, serverTimestamp } from 'firebase/firestore';
 import { Link } from 'react-router-dom';
 
 export default function Notificaciones() {
@@ -27,27 +27,49 @@ export default function Notificaciones() {
     alert("NOTIFICACIÓN MARCADA COMO RESUELTA");
   };
 
+  const handleNuevaAlerta = async () => {
+    try {
+      await addDoc(collection(db, 'municipio_notifications'), {
+        title: 'ALERTA MANUAL DETECTADA VÍA OPERADOR',
+        message: 'Incidencia reportada de manera manual en el Centro de Notificaciones. Pendiente de revisión técnica.',
+        type: 'info',
+        level: 'NIVEL DE REVISIÓN',
+        status: 'NUEVO',
+        timeStr: 'Borrador',
+        fullDate: new Date().toLocaleString(),
+        location: 'No especificada',
+        createdAt: serverTimestamp()
+      });
+      alert('Se ha registrado una nueva alerta en el panel.');
+    } catch (e) {
+      alert("Error al crear alerta manual");
+    }
+  };
+
+  const handleContactarMando = () => {
+    alert("Iniciando conexión cifrada con el Comando Central de Emergencias, espere...");
+  };
+
   return (
-    <div className="bg-[#131313] text-[#e5e2e1] h-screen flex flex-col font-body selection:bg-[#ffb3b1]/30">
-      <header className="fixed top-0 left-0 w-full z-50 flex justify-between items-center px-8 h-20 bg-[#131313]/40 backdrop-blur-xl border-b border-[#e5e2e1]/15 shadow-[0_20px_50px_rgba(255,179,177,0.08)]">
+    <div className="bg-[#0d0d0d] text-[#e5e2e1] h-screen flex flex-col font-body">
+      <header className="fixed top-0 left-0 w-full z-50 flex justify-between items-center px-8 h-20 bg-[#0d0d0d]/80 backdrop-blur-xl border-b border-white/5">
         <div className="flex items-center gap-10">
-          <span className="text-xl font-manrope font-black tracking-tighter text-[#ffb3b1] uppercase">ALCALDÍA DE CUENCA</span>
-          <nav className="hidden lg:flex items-center gap-8 text-[10px] font-black uppercase tracking-widest">
-            <Link className="text-[#e5e2e1]/60 hover:text-[#e5e2e1] transition-colors" to="/municipio/dashboard">Panel de Control</Link>
-            <Link className="text-[#ffb3b1] border-b-2 border-[#ff535b] pb-1" to="/municipio/notifications">Notificaciones</Link>
-            <Link className="text-[#e5e2e1]/60 hover:text-[#e5e2e1] transition-colors" to="/municipio/turismo">Gestión Turística</Link>
-            <Link className="text-[#e5e2e1]/60 hover:text-[#e5e2e1] transition-colors" to="/municipio/data-intel">Inteligencia de Datos</Link>
-            <Link className="text-[#e5e2e1]/60 hover:text-[#e5e2e1] transition-colors" to="/municipio/agenda">Agenda de la Ciudad</Link>
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 bg-tertiary-container rounded-sm flex items-center justify-center">
+              <span className="material-symbols-outlined text-on-tertiary-container text-lg">explore</span>
+            </div>
+            <div className="text-xl font-headline font-black tracking-tighter text-tertiary-fixed-dim uppercase">GESTION TURISTICA</div>
+          </div>
+          <nav className="hidden lg:flex items-center gap-8 font-body uppercase text-[10px] tracking-widest">
+            <Link className="text-white/50 hover:text-tertiary-fixed-dim transition-colors" to="/municipio/dashboard">Dashboard</Link>
+            <Link className="text-white/50 hover:text-tertiary-fixed-dim transition-colors" to="/municipio/turismo">Turismo</Link>
+            <Link className="text-white/50 hover:text-tertiary-fixed-dim transition-colors" to="/municipio/data-intel">Datos</Link>
+            <Link className="text-white/50 hover:text-tertiary-fixed-dim transition-colors" to="/municipio/agenda">Agenda</Link>
+            <Link className="text-tertiary-fixed-dim border-b-2 border-tertiary-container pb-1" to="/municipio/notifications">Notificaciones</Link>
+            <Link className="text-white/50 hover:text-tertiary-fixed-dim transition-colors" to="/municipio/perfil">Perfil</Link>
           </nav>
         </div>
-        <div className="flex items-center gap-8">
-          <button className="flex items-center gap-2 px-6 py-2 bg-[#ff535b] text-[#5b000e] rounded font-black text-[10px] uppercase tracking-widest hover:brightness-110 active:scale-95 transition-all shadow-[0_10px_30px_rgba(255,83,91,0.2)]">
-            Nueva Alerta
-          </button>
-          <div className="h-10 w-10 rounded-full border border-white/10 overflow-hidden cursor-pointer">
-            <img alt="User" className="w-full h-full object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDQjUBYmJlwRmKha2aYYTILTJg0M4U1bYKWZ5sRo1i7KrBJCzcva89bxaEIKyPcXAysE54Ib093r5JzYGiOOgBZhO4179ery6TR9Ag9XGbnCWbMe-ngbrAPf9KKNao_HOcjexb__kstfZMhP7wTTMmFMgUTM6ltjbzvsXt7bd4B7e7gsrji3e4Lkzv8o3d6EtEv1Njar3OtUFOK5ZfkGa-CVxyN_pkdOD1p5ZWIFSk-SaLyXc2ce7s0UOUibRcS_wVkNOOHqvvCh5Y"/>
-          </div>
-        </div>
+        <button onClick={handleNuevaAlerta} className="px-5 h-9 bg-tertiary-container text-on-tertiary font-headline font-black text-[9px] tracking-widest uppercase rounded-sm hover:brightness-110 active:scale-95 transition-all shadow-lg">Nueva Alerta</button>
       </header>
 
       <main className="pt-20 h-full flex overflow-hidden">
@@ -135,7 +157,7 @@ export default function Notificaciones() {
               </div>
 
               <div className="flex flex-wrap gap-6 pt-12 border-t border-white/5">
-                <button className="flex items-center gap-3 px-8 py-4 bg-[#ff535b] text-white rounded-sm font-black uppercase tracking-widest text-[10px] hover:scale-105 transition-all shadow-2xl">
+                <button onClick={handleContactarMando} className="flex items-center gap-3 px-8 py-4 bg-[#ff535b] text-white rounded-sm font-black uppercase tracking-widest text-[10px] hover:scale-105 transition-all shadow-2xl">
                   <span className="material-symbols-outlined text-lg">emergency</span>
                   Contactar Centro de Mando
                 </button>

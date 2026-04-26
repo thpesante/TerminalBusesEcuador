@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { db } from '../../firebase';
-import { collection, onSnapshot } from 'firebase/firestore';
+import { collection, onSnapshot, addDoc, serverTimestamp } from 'firebase/firestore';
 import { Link } from 'react-router-dom';
 
 export default function DataIntel() {
@@ -27,31 +27,43 @@ export default function DataIntel() {
     return () => unsub();
   }, []);
 
+  const handleEmergencyTrigger = async () => {
+    try {
+      await addDoc(collection(db, 'municipio_notifications'), {
+        title: 'ALERTA INTEL: ANOMALÍA EN FLUJO DE PASAJEROS',
+        message: 'El sistema de inteligencia de datos ha detectado una anomalía masiva en la densidad poblacional. Requiere revisión.',
+        type: 'error',
+        level: 'NIVEL DE OBSERVACIÓN',
+        status: 'ACTIVO',
+        location: 'Red de Transporte (Global)',
+        createdAt: serverTimestamp()
+      });
+      alert("ALERTA DE INTELIGENCIA GENERADA - NOTIFICACIÓN ENVIADA AL COMANDO CENTRAL");
+    } catch (e) {
+      alert("Error al emitir alerta de emergencia");
+    }
+  };
+
   return (
-    <div className="bg-[#131313] text-[#e5e2e1] min-h-screen flex flex-col font-body">
-      <header className="fixed top-0 left-0 w-full z-50 flex justify-between items-center px-8 h-20 bg-[#131313]/40 backdrop-blur-xl border-b border-[#e5e2e1]/15 shadow-[0_20px_50px_rgba(255,179,177,0.08)]">
+    <div className="bg-[#0d0d0d] text-[#e5e2e1] min-h-screen flex flex-col font-body">
+      <header className="fixed top-0 left-0 w-full z-50 flex justify-between items-center px-8 h-20 bg-[#0d0d0d]/80 backdrop-blur-xl border-b border-white/5">
         <div className="flex items-center gap-10">
-          <div className="flex items-center gap-3 cursor-pointer">
-            <div className="w-8 h-8 bg-[#ff535b] rounded-sm flex items-center justify-center">
-              <span className="material-symbols-outlined text-[#5b000e] text-lg" style={{ fontVariationSettings: "'FILL' 1" }}>shield</span>
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 bg-tertiary-container rounded-sm flex items-center justify-center">
+              <span className="material-symbols-outlined text-on-tertiary-container text-lg">explore</span>
             </div>
-            <h1 className="text-xl font-manrope font-black tracking-tighter text-[#ffb3b1] uppercase leading-none">
-                MUNICIPIO<br/><span className="text-xs tracking-[0.2em] font-bold">DE CUENCA</span>
-            </h1>
+            <div className="text-xl font-headline font-black tracking-tighter text-tertiary-fixed-dim uppercase">GESTION TURISTICA</div>
           </div>
-          <nav className="hidden xl:flex items-center gap-8 text-[10px] font-black uppercase tracking-widest">
-            <Link className="text-[#e5e2e1]/60 hover:text-[#e5e2e1] transition-colors" to="/municipio/dashboard">Panel de Control</Link>
-            <Link className="text-[#e5e2e1]/60 hover:text-[#e5e2e1] transition-colors" to="/municipio/turismo">Gestión Turística</Link>
-            <Link className="text-[#ffb3b1] border-b-2 border-[#ff535b] pb-1" to="/municipio/data-intel">Inteligencia de Datos</Link>
-            <Link className="text-[#e5e2e1]/60 hover:text-[#e5e2e1] transition-colors" to="/municipio/agenda">Agenda de la Ciudad</Link>
+          <nav className="hidden lg:flex items-center gap-8 font-body uppercase text-[10px] tracking-widest">
+            <Link className="text-white/50 hover:text-tertiary-fixed-dim transition-colors" to="/municipio/dashboard">Dashboard</Link>
+            <Link className="text-white/50 hover:text-tertiary-fixed-dim transition-colors" to="/municipio/turismo">Turismo</Link>
+            <Link className="text-tertiary-fixed-dim border-b-2 border-tertiary-container pb-1" to="/municipio/data-intel">Datos</Link>
+            <Link className="text-white/50 hover:text-tertiary-fixed-dim transition-colors" to="/municipio/agenda">Agenda</Link>
+            <Link className="text-white/50 hover:text-tertiary-fixed-dim transition-colors" to="/municipio/notifications">Notificaciones</Link>
+            <Link className="text-white/50 hover:text-tertiary-fixed-dim transition-colors" to="/municipio/perfil">Perfil</Link>
           </nav>
         </div>
-        <div className="flex items-center gap-6">
-          <button className="bg-[#ff535b] text-[#131313] font-black px-6 py-2 rounded-sm tracking-widest text-[9px] uppercase shadow-[0_5px_15px_rgba(255,83,91,0.3)] hover:scale-105 transition-transform">EMERGENCIA</button>
-          <div className="w-10 h-10 rounded-full border-2 border-[#ffb3b1] overflow-hidden ml-4">
-            <img alt="User" className="w-full h-full object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBoVRccrMzQtX11JMpoYDYk-W5HtAGyQneRrUofr_BqVPviWS9la9RtHqCwLn5oVs6adpt6KWfPbcxtNucX4iKEwDAxFWY2k-SctLg8pEe_QLErfrXDWtL8VSo4Xr9rL868uzX71X-DI3wREK5o3tle5RuU7jou5omKEmvhbSDIQ5h_NKa1XgNVs5eqTeJ3EI5a7AV0DwvO472V90ff62bHHSIDRs7LOiXlJwk8jEMKO2dTqgGmGmBp-CEKtGRlcsKg8lv_rGySgaU"/>
-          </div>
-        </div>
+        <button onClick={handleEmergencyTrigger} className="px-5 h-9 bg-tertiary-container text-on-tertiary font-headline font-black text-[9px] tracking-widest uppercase rounded-sm hover:brightness-110 active:scale-95 transition-all shadow-lg">Emergencia</button>
       </header>
 
       <main className="flex-1 min-h-screen pt-28">

@@ -44,10 +44,10 @@ export default function ERPSidebar({ activePath }: ERPSidebarProps) {
         <h1 className="text-2xl font-black uppercase tracking-widest text-[#ffe07f]">Bus ERP</h1>
         <div className="mt-8 flex items-center gap-3 p-3 bg-white/5 rounded-xl border border-white/10">
           <div className="w-10 h-10 rounded-full overflow-hidden border-2 border-[#ffe07f]">
-            <img 
-              className="w-full h-full object-cover grayscale brightness-125" 
-              alt="Profile" 
-              src="https://lh3.googleusercontent.com/aida-public/AB6AXuANXKPNzgv89UaHJzU6fRzpUieHP_f6fE6SuyvDEl26zQJ-zUcJhCbFX9epLx5zX2RcvHxHYlabzoGoVeBPF3TDwNuqfvmKabMs81CjRyldduqQysR8Xs4fT67rYHUKWxPNnypxSzQeeJPKsspan6fG6GVAM6X_Z3aArAx9lhvaLbW0_YJsxKEShp4CGaAqsNuadGnwzRJK9bau_Amk3VvR6BEVS0h-_nDH7708TldHwtD1zj_SmagHEbU8CUc-kBnBJM8L0m6e3yb8" 
+            <img
+              className="w-full h-full object-cover grayscale brightness-125"
+              alt="Profile"
+              src="https://lh3.googleusercontent.com/aida-public/AB6AXuANXKPNzgv89UaHJzU6fRzpUieHP_f6fE6SuyvDEl26zQJ-zUcJhCbFX9epLx5zX2RcvHxHYlabzoGoVeBPF3TDwNuqfvmKabMs81CjRyldduqQysR8Xs4fT67rYHUKWxPNnypxSzQeeJPKsspan6fG6GVAM6X_Z3aArAx9lhvaLbW0_YJsxKEShp4CGaAqsNuadGnwzRJK9bau_Amk3VvR6BEVS0h-_nDH7708TldHwtD1zj_SmagHEbU8CUc-kBnBJM8L0m6e3yb8"
             />
           </div>
           <div>
@@ -56,7 +56,7 @@ export default function ERPSidebar({ activePath }: ERPSidebarProps) {
           </div>
         </div>
       </div>
-      
+
       <nav className="flex-1 px-3 space-y-1 overflow-y-auto custom-scrollbar">
         {visibleItems.map((item) => {
           const isActive = currentPath === item.path;
@@ -64,11 +64,10 @@ export default function ERPSidebar({ activePath }: ERPSidebarProps) {
             <Link
               key={item.name}
               to={item.path}
-              className={`flex items-center gap-3 px-4 py-3 font-bold transition-all duration-150 rounded-xl group cursor-pointer ${
-                isActive 
-                  ? 'text-[#ffe07f] bg-white/10 shadow-lg shadow-black/20' 
+              className={`flex items-center gap-3 px-4 py-3 font-bold transition-all duration-150 rounded-xl group cursor-pointer ${isActive
+                  ? 'text-[#ffe07f] bg-white/10 shadow-lg shadow-black/20'
                   : 'text-blue-200/60 hover:text-white hover:bg-white/5'
-              }`}
+                }`}
             >
               <span className="material-symbols-outlined text-xl" style={isActive ? { fontVariationSettings: "'FILL' 1" } : {}}>{item.icon}</span>
               <span className="text-xs uppercase tracking-wider">{item.name}</span>
@@ -76,21 +75,16 @@ export default function ERPSidebar({ activePath }: ERPSidebarProps) {
           );
         })}
       </nav>
-      
-      <div className="p-6">
-        <button className="w-full py-4 bg-[#ffe07f] text-[#00113a] font-black text-xs uppercase tracking-[0.2em] rounded-xl shadow-lg shadow-[#ffe07f]/10 active:scale-95 transition-all flex items-center justify-center gap-2">
-          <span className="material-symbols-outlined text-sm">add</span>
-          Nuevo Despacho
-        </button>
-      </div>
 
-      
+
+
+
       <div className="p-4 border-t border-[#42494f]/15 space-y-1">
         <button className="flex w-full items-center gap-3 px-4 py-2 text-slate-400 font-medium hover:text-white cursor-pointer transition-colors">
           <span className="material-symbols-outlined text-lg">help</span>
           <span className="text-sm">Soporte</span>
         </button>
-        <button 
+        <button
           onClick={handleLogout}
           className="flex w-full items-center gap-3 px-4 py-2 text-red-300 font-bold hover:text-red-100 hover:bg-red-500/10 rounded-xl cursor-pointer transition-all"
         >

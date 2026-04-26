@@ -1,15 +1,48 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import MapBoxComponent from '../../components/MapBoxComponent';
+import { collection, query, where, getDocs, doc, getDoc } from 'firebase/firestore';
+import { auth, db } from '../../firebase';
 
 interface HubViewProps {
   setView: (view: any) => void;
 }
 
-const TERMINAL_DATA = {
+interface Province {
+  name: string;
+  cantons: string[];
+}
+
+const ecuadorProvinces: Province[] = [
+    { name: "Esmeraldas", cantons: ["Esmeraldas", "Atacames", "Eloy Alfaro", "Muisne", "Quinindé", "Rioverde", "San Lorenzo"] },
+    { name: "Manabí", cantons: ["Portoviejo", "24 de Mayo", "Bolívar", "Chone", "El Carmen", "Flavio Alfaro", "Jama", "Jaramijó", "Jipijapa", "Junín", "Manta", "Montecristi", "Olmedo", "Paján", "Pedernales", "Pichincha", "Puerto López", "Rocafuerte", "Santa Ana", "San Vicente", "Sucre", "Tosagua"] },
+    { name: "Santo Domingo de los Tsáchilas", cantons: ["Santo Domingo", "La Concordia"] },
+    { name: "Los Ríos", cantons: ["Babahoyo", "Baba", "Buena Fe", "Mocache", "Montalvo", "Palenque", "Puebloviejo", "Quevedo", "Quinsaloma", "Urdaneta", "Valencia", "Ventanas", "Vinces"] },
+    { name: "Guayas", cantons: ["Guayaquil", "Alfredo Baquerizo Moreno (Juján)", "Balao", "Balzar", "Colimes", "Daule", "El Empalme", "El Triunfo", "General Antonio Elizalde (Bucay)", "Isidro Ayora", "Lomas de Sargentillo", "Marcelino Maridueña", "Milagro", "Naranjal", "Naranjito", "Nobol", "Palestina", "Pedro Carbo", "Playas", "Salitre", "Samborondón", "Santa Lucía", "Simón Bolívar", "Coronel Marcelino Maridueña", "Yaguachi"] },
+    { name: "Santa Elena", cantons: ["Santa Elena", "La Libertad", "Salinas"] },
+    { name: "El Oro", cantons: ["Machala", "Arenillas", "Atahualpa", "Balsas", "Chilla", "El Guabo", "Huaquillas", "Las Lajas", "Marcabelí", "Pasaje", "Piñas", "Portovelo", "Santa Rosa", "Zaruma"] },
+    { name: "Carchi", cantons: ["Tulcán", "Bolívar", "Espejo", "Mira", "Montúfar", "San Pedro de Huaca"] },
+    { name: "Imbabura", cantons: ["Ibarra", "Antonio Ante", "Cotacachi", "Otavalo", "Pimampiro", "San Miguel de Urcuquí"] },
+    { name: "Pichincha", cantons: ["Quito", "Cayambe", "Mejía", "Pedro Moncayo", "Pedro Vicente Maldonado", "Puerto Quito", "Rumiñahui", "San Miguel de los Bancos"] },
+    { name: "Cotopaxi", cantons: ["Latacunga", "La Maná", "Pangua", "Pujilí", "Salcedo", "Saquisilí", "Sigchos"] },
+    { name: "Tungurahua", cantons: ["Ambato", "Baños de Agua Santa", "Cevallos", "Mocha", "Patate", "Pelileo", "Píllaro", "Quero", "Tisaleo"] },
+    { name: "Bolívar", cantons: ["Guaranda", "Caluma", "Chillanes", "Chimbo", "Echeandía", "Las Naves", "San Miguel"] },
+    { name: "Chimborazo", cantons: ["Riobamba", "Alausí", "Chambo", "Chunchi", "Colta", "Cumandá", "Guamote", "Guano", "Pallatanga", "Penipe"] },
+    { name: "Cañar", cantons: ["Azogues", "Biblián", "Cañar", "Déleg", "El Tambo", "La Troncal", "Suscal"] },
+    { name: "Azuay", cantons: ["Cuenca", "Camilo Ponce Enríquez", "Chordeleg", "El Pan", "Girón", "Guachapala", "Gualaceo", "Nabón", "Oña", "Paute", "Pucará", "San Fernando", "Santa Isabel", "Sevilla de Oro", "Sígsig"] },
+    { name: "Loja", cantons: ["Loja", "Calvas", "Catamayo", "Celica", "Chaguarpamba", "Espíndola", "Gonzanamá", "Macará", "Olmedo", "Paltas", "Pindal", "Puyango", "Quilanga", "Saraguro", "Sozoranga", "Zapotillo"] },
+    { name: "Sucumbíos", cantons: ["Nueva Loja (Lago Agrio)", "Cascales", "Cuyabeno", "Gonzalo Pizarro", "Putumayo", "Shushufindi", "Sucumbíos"] },
+    { name: "Napo", cantons: ["Tena", "Archidona", "Carlos Julio Arosemena Tola", "El Chaco", "Quijos"] },
+    { name: "Orellana", cantons: ["Francisco de Orellana", "Aguarico", "La Joya de los Sachas", "Loreto"] },
+    { name: "Pastaza", cantons: ["Puyo (Pastaza)", "Arajuno", "Mera", "Santa Clara"] },
+    { name: "Morona Santiago", cantons: ["Macas (Morona)", "Gualaquiza", "Huamboya", "Limón Indanza", "Logroño", "Pablo Sexto", "Palora", "San Juan Bosco", "Santiago", "Sevilla Don Bosco", "Sucúa", "Taisha", "Tiwintza"] },
+    { name: "Zamora Chinchipe", cantons: ["Zamora", "Centinela del Cóndor", "Chinchipe", "El Pangui", "Nangaritza", "Palanda", "Paquisha", "Yacuambi", "Yantzaza"] },
+    { name: "Galápagos", cantons: ["San Cristóbal", "Isabela", "Santa Cruz"] }
+];
+
+const TERMINAL_DATA: Record<string, any> = {
   quito: {
-    name: 'Quitumbe (Quito)',
-    coords: [-78.5256, -0.2858] as [number, number],
+    coords: [-78.5256, -0.2858],
     destinations: [
       { 
         id: 'quito-1', title: 'Centro Histórico', category: 'Cultura', image: 'https://images.unsplash.com/photo-1599026402324-4ae0193297a7?auto=format&fit=crop&q=80&w=800', 
@@ -26,15 +59,10 @@ const TERMINAL_DATA = {
         description: 'Vistas impresionantes de los Andes a más de 4,000 msnm.',
         details: 'Para llegar desde Quitumbe, toma el Metro hasta la estación Ejido y luego un taxi corto hacia las faldas del volcán Pichincha.'
       }
-    ],
-    events: [
-      { title: 'Festival del Pasillo', date: 'Esta semana', icon: 'music_note' },
-      { title: 'Feria Gastronómica Sur', date: 'Viernes 25', icon: 'restaurant' }
     ]
   },
   guayaquil: {
-    name: 'J. Roldós Aguilera (GYE)',
-    coords: [-79.8862, -2.1466] as [number, number],
+    coords: [-79.8862, -2.1466],
     destinations: [
       { 
         id: 'gye-1', title: 'Malecón 2000', category: 'Urbanismo', image: 'https://images.unsplash.com/photo-1585822700542-a044d08f4c47?auto=format&fit=crop&q=80&w=800', 
@@ -46,15 +74,10 @@ const TERMINAL_DATA = {
         description: 'El barrio más antiguo de Guayaquil con escalinatas y casas coloridas.',
         details: 'Sube los 444 escalones del Cerro Santa Ana para una vista de 360 grados. Toma la Metrovía hasta la estación Jardines del Malecón.'
       }
-    ],
-    events: [
-      { title: 'Concierto en la Perla', date: 'Sábado 26', icon: 'theater_comedy' },
-      { title: 'Mercado del Río', date: 'Todo el mes', icon: 'shopping_bag' }
     ]
   },
   cuenca: {
-    name: 'Gil Ramírez (Cuenca)',
-    coords: [-78.9950, -2.8974] as [number, number],
+    coords: [-78.9950, -2.8974],
     destinations: [
       { 
         id: 'cuenca-1', title: 'Parque Nacional Cajas', category: 'Naturaleza', image: 'https://lh3.googleusercontent.com/aida-public/AB6AXuBABOIKqTCeys-uEKUQI4i-S7_F_gWfNf1bKkpvfEnFD5EhhT889V5RAujVfr5-nXjXk0NdYkfgE_ApPiNVZln1U9iwxT77GPoSE1MStI5_VGMoVp6KNmRL6hXQGI8aQ9j2yQTjsK2g_Sl4TwW9GnKKtoNUNmPPXiGA2oCCULmbh78Q-AiHcqt26XnDxLxCSR_HwCQYVsbGA1xDHK_XyNjQyBGL6V_63qjfylGVB2NSMhyImd0wAfUknzkrafVKSbvV8-zJ6JnSzhkL', 
@@ -71,19 +94,57 @@ const TERMINAL_DATA = {
         description: 'Pueblos mágicos famosos por sus artesanías y joyas de filigrana.',
         details: 'Buses intercantonales salen cada 15 min desde la terminal Cuenca. Viaje de aproximadamente 50 minutos.'
       }
-    ],
-    events: [
-      { title: 'Fiesta de la Filigrana', date: 'Esta semana', icon: 'diamond' },
-      { title: 'Ruta del Pan en Gualaceo', date: 'Domingo 27', icon: 'bakery_dining' }
     ]
   }
 };
 
 const HubView: React.FC<HubViewProps> = ({ setView }) => {
   const navigate = useNavigate();
-  const [selectedCity, setSelectedCity] = useState<keyof typeof TERMINAL_DATA>('quito');
+  const [selectedProvince, setSelectedProvince] = useState<string>('Pichincha');
+  const [selectedCanton, setSelectedCanton] = useState<string>('Quito');
   const [selectedDestination, setSelectedDestination] = useState<any>(null);
+  const [dbEvents, setDbEvents] = useState<any[]>([]);
   const scrollRef = React.useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const fetchUserLocation = async () => {
+      if (auth.currentUser) {
+        try {
+          const userDoc = await getDoc(doc(db, 'users', auth.currentUser.uid));
+          if (userDoc.exists()) {
+            const data = userDoc.data();
+            if (data.provincia) {
+              setSelectedProvince(data.provincia);
+            }
+            if (data.canton) {
+              setSelectedCanton(data.canton);
+            }
+          }
+        } catch(e) {
+          console.error("Error fetching user data", e);
+        }
+      }
+    };
+    fetchUserLocation();
+  }, []);
+
+  useEffect(() => {
+    const fetchEvents = async () => {
+      try {
+        const q = query(collection(db, 'municipio_events'), where('canton', '==', selectedCanton));
+        const querySnapshot = await getDocs(q);
+        const eventsData = querySnapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        }));
+        setDbEvents(eventsData);
+      } catch (e) {
+        console.error("Error fetching events", e);
+        setDbEvents([]);
+      }
+    };
+    fetchEvents();
+  }, [selectedCanton]);
 
   const scroll = (dir: 'left' | 'right') => {
     if (scrollRef.current) {
@@ -91,7 +152,21 @@ const HubView: React.FC<HubViewProps> = ({ setView }) => {
     }
   };
 
-  const cityData = TERMINAL_DATA[selectedCity];
+  const normalizedCanton = selectedCanton.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  
+  const cityData = TERMINAL_DATA[normalizedCanton] || {
+    coords: [-78.5256, -0.2858],
+    destinations: [
+      { 
+        id: `generic-${selectedCanton}`, 
+        title: `Explora ${selectedCanton}`, 
+        category: 'Turismo', 
+        image: 'https://images.unsplash.com/photo-1599026402324-4ae0193297a7?auto=format&fit=crop&q=80&w=800', 
+        description: `Descubre los mejores lugares y atracciones de ${selectedCanton}.`,
+        details: `Disfruta todo lo que ${selectedCanton} tiene para ofrecer partiendo de nuestra terminal.`
+      }
+    ]
+  };
 
   return (
     <div className="animate-fade-in pb-12">
@@ -99,20 +174,35 @@ const HubView: React.FC<HubViewProps> = ({ setView }) => {
       <div className="mb-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
         <div>
            <h1 className="text-4xl md:text-5xl font-black font-headline text-primary mb-2 tracking-tighter">¿Cuál es tu origen?</h1>
-           <p className="text-slate-400 font-bold text-xs uppercase tracking-widest">Selecciona una terminal para explorar tu entorno</p>
+           <p className="text-slate-400 font-bold text-xs uppercase tracking-widest">Selecciona una provincia y cantón</p>
         </div>
-        <div className="flex bg-white/80 backdrop-blur-xl p-1.5 rounded-2xl shadow-xl border border-slate-100 self-start">
-           {(Object.keys(TERMINAL_DATA) as Array<keyof typeof TERMINAL_DATA>).map((key) => (
-             <button
-               key={key}
-               onClick={() => setSelectedCity(key)}
-               className={`px-6 py-3 rounded-xl font-bold text-xs uppercase tracking-widest transition-all
-                 ${selectedCity === key ? 'bg-primary text-white shadow-lg' : 'text-slate-500 hover:bg-slate-50'}
-               `}
-             >
-               {key}
-             </button>
-           ))}
+        <div className="flex flex-col md:flex-row gap-4 self-start bg-white/80 backdrop-blur-xl p-3 rounded-2xl shadow-xl border border-slate-100">
+           <select 
+              value={selectedProvince}
+              onChange={(e) => {
+                const newProv = e.target.value;
+                setSelectedProvince(newProv);
+                const provinceData = ecuadorProvinces.find(p => p.name === newProv);
+                if (provinceData && provinceData.cantons.length > 0) {
+                  setSelectedCanton(provinceData.cantons[0]);
+                }
+              }}
+              className="px-6 py-3 rounded-xl font-bold text-xs uppercase tracking-widest bg-white shadow-sm border border-slate-200 text-slate-700 outline-none focus:ring-2 focus:ring-primary appearance-none cursor-pointer"
+           >
+              {ecuadorProvinces.map(p => (
+                <option key={p.name} value={p.name}>{p.name}</option>
+              ))}
+           </select>
+
+           <select 
+              value={selectedCanton}
+              onChange={(e) => setSelectedCanton(e.target.value)}
+              className="px-6 py-3 rounded-xl font-bold text-xs uppercase tracking-widest bg-primary text-white shadow-xl border border-primary outline-none focus:ring-2 focus:ring-secondary appearance-none cursor-pointer"
+           >
+              {ecuadorProvinces.find(p => p.name === selectedProvince)?.cantons.map(c => (
+                <option key={c} value={c}>{c}</option>
+              ))}
+           </select>
         </div>
       </div>
 
@@ -121,13 +211,13 @@ const HubView: React.FC<HubViewProps> = ({ setView }) => {
         <div className="md:col-span-8 relative overflow-hidden rounded-[2.5rem] min-h-[400px] shadow-2xl group border-4 border-white">
           <img 
             className="absolute inset-0 w-full h-full object-cover transition-transform duration-1000 group-hover:scale-110" 
-            alt={cityData.name} 
+            alt={selectedCanton} 
             src={cityData.destinations[0].image}
           />
           <div className="absolute inset-0 bg-gradient-to-t from-primary/95 via-primary/30 to-transparent flex flex-col justify-end p-8 md:p-12">
             <span className="bg-secondary text-white px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-[0.2em] mb-4 w-fit shadow-lg shadow-secondary/20">Terminal Seleccionada</span>
             <h2 className="text-white text-4xl md:text-6xl font-black font-headline max-w-lg leading-none tracking-tighter editorial-text-shadow">
-               Terminal <br/> {cityData.name.split(' (')[0]}
+               Terminal <br/> {selectedCanton}
             </h2>
             <div className="flex flex-wrap gap-4 mt-8">
                <button 
@@ -151,20 +241,24 @@ const HubView: React.FC<HubViewProps> = ({ setView }) => {
             <div className="bg-white p-6 rounded-[2.5rem] shadow-xl border border-slate-100 flex-1">
                 <h3 className="text-primary font-black font-headline text-sm tracking-widest uppercase mb-6 flex items-center gap-3">
                     <span className="w-2 h-6 bg-secondary rounded-full"></span>
-                    Eventos {selectedCity}
+                    Eventos {selectedCanton}
                 </h3>
-                <div className="space-y-4">
-                    {cityData.events.map((event, i) => (
-                        <div key={i} className="flex items-center gap-4 group cursor-pointer p-4 border border-transparent hover:border-slate-100 hover:bg-slate-50 rounded-2xl transition-all">
-                            <div className="w-12 h-12 bg-primary/5 rounded-xl flex items-center justify-center text-primary">
-                                <span className="material-symbols-outlined">{event.icon}</span>
+                <div className="space-y-4 max-h-[250px] overflow-y-auto no-scrollbar pr-2">
+                    {dbEvents.length > 0 ? dbEvents.map((event, i) => (
+                        <div key={event.id || i} className="flex items-center gap-4 group cursor-pointer p-4 border border-transparent hover:border-slate-100 hover:bg-slate-50 rounded-2xl transition-all">
+                            <div className="w-12 h-12 bg-primary/5 rounded-xl flex items-center justify-center text-primary shrink-0">
+                                <span className="material-symbols-outlined">event</span>
                             </div>
                             <div>
-                                <p className="font-black text-primary text-sm leading-none">{event.title}</p>
-                                <p className="text-[10px] text-emerald-500 font-bold uppercase mt-1.5 tracking-widest">{event.date}</p>
+                                <p className="font-black text-primary text-sm leading-tight line-clamp-2">{event.title}</p>
+                                <p className="text-[10px] text-emerald-500 font-bold uppercase mt-1.5 tracking-widest">
+                                  {event.time || (event.createdAt?.seconds ? new Date(event.createdAt.seconds * 1000).toLocaleDateString() : '')} • {event.location || ''}
+                                </p>
                             </div>
                         </div>
-                    ))}
+                    )) : (
+                        <p className="text-slate-400 text-sm font-medium text-center py-4">No hay eventos próximos en {selectedCanton}</p>
+                    )}
                 </div>
                 <button onClick={() => alert('Calendario de eventos próximamente')} className="w-full mt-6 py-4 bg-slate-50 text-slate-400 font-bold text-[10px] rounded-2xl uppercase tracking-[0.2em] hover:bg-slate-100 transition-colors">Ver Calendario Completo</button>
             </div>
@@ -183,7 +277,7 @@ const HubView: React.FC<HubViewProps> = ({ setView }) => {
         </div>
       </section>
 
-      {/* Featured Destinations (The requested Section) */}
+      {/* Featured Destinations */}
       <section className="mb-16">
         <div className="flex items-end justify-between mb-8 px-2">
             <div>
@@ -201,7 +295,7 @@ const HubView: React.FC<HubViewProps> = ({ setView }) => {
         </div>
 
         <div ref={scrollRef} className="flex gap-6 overflow-x-auto pb-8 no-scrollbar scroll-smooth px-2">
-           {cityData.destinations.map((dest) => (
+           {cityData.destinations.map((dest: any) => (
              <div 
                key={dest.id} 
                onClick={() => setSelectedDestination(dest)}
@@ -241,14 +335,14 @@ const HubView: React.FC<HubViewProps> = ({ setView }) => {
       <section className="mb-8">
         <h2 className="text-xl font-black font-headline text-primary mb-6 flex items-center gap-3">
             <span className="material-symbols-outlined text-secondary">explore</span>
-            Tu Conexión en {selectedCity.toUpperCase()}
+            Tu Conexión en {selectedCanton.toUpperCase()}
         </h2>
         <div className="relative h-[450px] w-full rounded-[3rem] overflow-hidden shadow-2xl border-4 border-white/50">
           <MapBoxComponent 
             center={cityData.coords} 
             zoom={12} 
             markers={[
-              { lngLat: cityData.coords, title: cityData.name, type: 'terminal', description: 'Ubicación de origen' },
+              { lngLat: cityData.coords, title: `Terminal ${selectedCanton}`, type: 'terminal', description: 'Ubicación de origen' },
               { lngLat: cityData.destinations[0].coords || [cityData.coords[0] + 0.05, cityData.coords[1] + 0.05], title: cityData.destinations[0].title, type: 'stop', description: 'Destino destacado' }
             ]} 
           />
@@ -258,7 +352,7 @@ const HubView: React.FC<HubViewProps> = ({ setView }) => {
                     <span className="material-symbols-outlined">directions_bus</span>
                 </div>
                 <div>
-                   <p className="text-lg font-black text-primary font-headline leading-none">{cityData.name}</p>
+                   <p className="text-lg font-black text-primary font-headline leading-none">Terminal {selectedCanton}</p>
                    <p className="text-[10px] font-bold text-emerald-500 uppercase tracking-widest mt-2">Opera 24/7 • Monitoreo Activo</p>
                 </div>
             </div>
