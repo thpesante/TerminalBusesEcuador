@@ -8,7 +8,7 @@ import { collection, addDoc, serverTimestamp, setDoc, doc, getDoc } from 'fireba
 const UnitRegistration: React.FC = () => {
     const navigate = useNavigate();
     const { userData } = useAuth();
-    
+
     // Form States
     const [placa, setPlaca] = useState('');
     const [disco, setDisco] = useState('');
@@ -60,7 +60,7 @@ const UnitRegistration: React.FC = () => {
     }, [userData]);
 
     const toggleAmenity = (amenity: string) => {
-        setAmenities(prev => 
+        setAmenities(prev =>
             prev.includes(amenity) ? prev.filter(a => a !== amenity) : [...prev, amenity]
         );
     };
@@ -98,11 +98,11 @@ const UnitRegistration: React.FC = () => {
             const tempId = `temp_${user.uid}`;
             await setDoc(doc(db, 'units_draft', tempId), unitData);
 
-            navigate('/seat-designer', { 
-                state: { 
+            navigate('/seat-designer', {
+                state: {
                     draftId: tempId,
-                    unitData 
-                } 
+                    unitData
+                }
             });
         } catch (err: any) {
             console.error("Error guardando borrador:", err);
@@ -119,13 +119,13 @@ const UnitRegistration: React.FC = () => {
                 {/* TopAppBar */}
                 <header className="w-full sticky top-0 z-50 bg-[#f7f9fb]/80 backdrop-blur-md flex justify-between items-center px-12 py-6 border-b border-[#eceef0]">
                     <div className="flex items-center gap-4">
-                         <div className="w-12 h-12 bg-blue-600 rounded-2xl flex items-center justify-center text-white shadow-lg">
+                        <div className="w-12 h-12 bg-blue-600 rounded-2xl flex items-center justify-center text-white shadow-lg">
                             <span className="material-symbols-outlined text-2xl">directions_bus</span>
-                         </div>
-                         <div>
-                            <h2 className="font-headline tracking-tighter text-2xl font-black text-[#191c1e] italic">ORCHESTRATOR</h2>
+                        </div>
+                        <div>
+                            <h2 className="font-headline tracking-tighter text-2xl font-black text-[#191c1e] italic">MOVU</h2>
                             <p className="text-[9px] font-black uppercase tracking-[0.3em] text-slate-400">Configuración de Nueva Unidad</p>
-                         </div>
+                        </div>
                     </div>
                     <div className="flex items-center space-x-6">
                         <button onClick={() => navigate(-1)} className="text-slate-400 font-bold text-xs px-4 py-2 hover:bg-slate-100 rounded-xl transition-all">
@@ -231,7 +231,7 @@ const UnitRegistration: React.FC = () => {
                                         <label className="text-[10px] font-black text-[#45464d] uppercase tracking-widest ml-1">Arquitectura de Cabina</label>
                                         <div className="flex space-x-4">
                                             {['Normal', 'Dos Pisos'].map(type => (
-                                                <button 
+                                                <button
                                                     key={type}
                                                     onClick={() => setBusType(type)}
                                                     className={`flex-1 py-4 rounded-2xl font-black text-xs transition-all border-2 ${busType === type ? 'bg-slate-900 border-slate-900 text-white shadow-xl' : 'bg-slate-50 border-transparent text-slate-400 hover:bg-slate-100'}`}
@@ -245,7 +245,7 @@ const UnitRegistration: React.FC = () => {
                                         <label className="text-[10px] font-black text-[#45464d] uppercase tracking-widest ml-1">Personal de Bordo</label>
                                         <div className="flex space-x-4">
                                             {['Sí', 'No'].map(val => (
-                                                <button 
+                                                <button
                                                     key={val}
                                                     onClick={() => setHasAssistant(val)}
                                                     className={`flex-1 py-4 rounded-2xl font-black text-xs transition-all border-2 ${hasAssistant === val ? 'bg-blue-600 border-blue-600 text-white shadow-xl' : 'bg-slate-50 border-transparent text-slate-400 hover:bg-slate-100'}`}
@@ -261,7 +261,7 @@ const UnitRegistration: React.FC = () => {
                                         <label className="text-[10px] font-black text-[#45464d] uppercase tracking-widest ml-1">Gama de Asientos</label>
                                         <div className="flex flex-wrap gap-2">
                                             {['Reclinables', 'Semi-reclinables', 'Básico'].map(cat => (
-                                                <button 
+                                                <button
                                                     key={cat}
                                                     onClick={() => setSeatingType(cat)}
                                                     className={`px-6 py-3 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all ${seatingType === cat ? 'bg-blue-600 text-white' : 'bg-slate-50 text-slate-400 hover:bg-slate-100'}`}
@@ -276,7 +276,7 @@ const UnitRegistration: React.FC = () => {
                                             <p className="text-[10px] font-black text-[#3755c3] uppercase tracking-widest">Compartimiento</p>
                                             <p className="text-[9px] font-bold text-slate-400 uppercase mt-1">Bodega de carga pesada</p>
                                         </div>
-                                        <button 
+                                        <button
                                             onClick={() => setHasCompartment(!hasCompartment)}
                                             className={`relative inline-flex h-8 w-14 items-center rounded-full transition-colors duration-300 focus:outline-none ${hasCompartment ? 'bg-blue-600' : 'bg-slate-300'}`}
                                         >
@@ -300,7 +300,7 @@ const UnitRegistration: React.FC = () => {
                                         const label = icon === 'ac_unit' ? 'A/C' : icon.charAt(0).toUpperCase() + icon.slice(1).replace('_', ' ');
                                         const active = amenities.includes(icon);
                                         return (
-                                            <button 
+                                            <button
                                                 key={icon}
                                                 onClick={() => toggleAmenity(icon)}
                                                 className={`flex items-center p-5 rounded-2xl transition-all border-2 ${active ? 'bg-slate-900 border-slate-900 text-white shadow-lg' : 'bg-slate-50 border-transparent text-slate-400 hover:bg-slate-100'}`}
@@ -318,10 +318,10 @@ const UnitRegistration: React.FC = () => {
                         <div className="col-span-12 lg:col-span-4">
                             <div className="sticky top-28 space-y-6">
                                 <div className="bg-gradient-to-br from-[#00216e] to-[#001453] rounded-[3rem] p-10 text-white shadow-2xl relative overflow-hidden">
-                                     <div className="absolute -right-20 -top-20 w-64 h-64 bg-blue-500/10 rounded-full blur-[80px]"></div>
-                                     <h4 className="text-[10px] font-black uppercase tracking-[0.4em] text-blue-300 mb-10 italic">Estado del Proceso</h4>
-                                     
-                                     <div className="space-y-8 mb-12">
+                                    <div className="absolute -right-20 -top-20 w-64 h-64 bg-blue-500/10 rounded-full blur-[80px]"></div>
+                                    <h4 className="text-[10px] font-black uppercase tracking-[0.4em] text-blue-300 mb-10 italic">Estado del Proceso</h4>
+
+                                    <div className="space-y-8 mb-12">
                                         <div className="flex justify-between items-end">
                                             <div>
                                                 <p className="text-[10px] font-black text-blue-200/50 uppercase tracking-widest mb-1">Actualmente en</p>
@@ -332,22 +332,22 @@ const UnitRegistration: React.FC = () => {
                                         <div className="w-full h-3 bg-white/5 rounded-full overflow-hidden">
                                             <div className="w-1/3 h-full bg-blue-500 shadow-[0_0_20px_rgba(59,130,246,0.5)]"></div>
                                         </div>
-                                     </div>
+                                    </div>
 
-                                     <p className="text-xs font-medium text-blue-200/60 leading-relaxed mb-10">
+                                    <p className="text-xs font-medium text-blue-200/60 leading-relaxed mb-10">
                                         La información técnica será validada por el despacho central del Terminal Digital. Asegúrese que la placa sea legible.
-                                     </p>
+                                    </p>
 
-                                     {error && <p className="text-red-400 text-xs font-black uppercase mb-6 bg-red-400/10 p-4 rounded-2xl">{error}</p>}
+                                    {error && <p className="text-red-400 text-xs font-black uppercase mb-6 bg-red-400/10 p-4 rounded-2xl">{error}</p>}
 
-                                     <button
+                                    <button
                                         onClick={handleNext}
                                         disabled={isSaving}
                                         className="w-full bg-white text-[#001453] font-black h-20 rounded-[2rem] hover:scale-[1.02] active:scale-95 transition-all shadow-xl flex items-center justify-center gap-4 text-xs uppercase tracking-[0.3em] group"
-                                     >
+                                    >
                                         {isSaving ? 'Sincronizando...' : 'SIGUIENTE'}
                                         <span className="material-symbols-outlined group-hover:translate-x-2 transition-transform">arrow_forward</span>
-                                     </button>
+                                    </button>
                                 </div>
 
                                 <div className="bg-white p-10 rounded-[3rem] border border-slate-100">

@@ -62,7 +62,7 @@ const Dashboard = () => {
       if (!isDemoMode) {
         await signOut(auth);
       }
-      navigate('/');
+      window.location.replace('/');
     } catch (error) {
       console.error("Error al cerrar sesión:", error);
     }

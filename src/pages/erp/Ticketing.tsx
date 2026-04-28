@@ -2,8 +2,10 @@ import React, { useState, useEffect } from 'react';
 import ERPSidebar from '../../components/erp/ERPSidebar';
 import ERPTopBar from '../../components/erp/ERPTopBar';
 import { db, auth } from '../../firebase';
-import { collection, query, where, addDoc, serverTimestamp, onSnapshot, doc, updateDoc, getDoc, arrayUnion } from 'firebase/firestore';
+import { collection, query, where, addDoc, serverTimestamp, onSnapshot, doc, updateDoc, getDoc, arrayUnion, runTransaction } from 'firebase/firestore';
 import { useAuth } from '../../context/AuthContext';
+import { validarCedula } from '../../utils/validators';
+import { sequenceManager } from '../../services/SequenceManager';
 
 interface Trip {
   id: string;
@@ -93,7 +95,10 @@ export default function Ticketing() {
   }, [formData.tarifa, selectedTrip?.precio]);
 
   const handleIdentityLookup = async () => {
-    if (formData.cedula.length !== 10) return;
+    if (!validarCedula(formData.cedula)) {
+      // Si no es cédula válida, no intentamos el scraper
+      return;
+    }
     try {
       const proxyUrl = 'https://infoplacas.herokuapp.com/';
       const targetUrl = 'https://si.secap.gob.ec/sisecap/logeo_web/json/busca_persona_registro_civil.php';
@@ -140,16 +145,43 @@ export default function Ticketing() {
       setIsProcessing(true);
       
       const tripRef = doc(db, 'trips', selectedTrip.id);
-      // BLOQUEO ATÓMICO DE ASIENTOS
-      await updateDoc(tripRef, {
-        asientosOcupados: arrayUnion(...formData.asientos)
-      });
-      
-      // Emitir boletos individuales
-      for (const seatLabel of formData.asientos) {
-          await addDoc(collection(db, 'tickets'), {
+      const puntoEmision = userData?.officeId || '001';
+
+      // Obtener números secuenciales para cada asiento
+      const ticketNumbers: number[] = [];
+      for (let i = 0; i < formData.asientos.length; i++) {
+        const num = await sequenceManager.getNextNumber(rucEmpresa, puntoEmision);
+        ticketNumbers.push(num);
+      }
+
+      // BLINDAJE TOTAL: Transacción Atómica
+      await runTransaction(db, async (transaction) => {
+        const tripDoc = await transaction.get(tripRef);
+        if (!tripDoc.exists()) throw "El viaje no existe.";
+
+        const currentOccupied = tripDoc.data().asientosOcupados || [];
+        const alreadyTaken = formData.asientos.filter(s => currentOccupied.includes(s));
+
+        if (alreadyTaken.length > 0) {
+          throw `Error: Los asientos ${alreadyTaken.join(', ')} acaban de ser vendidos por otro usuario.`;
+        }
+
+        // 1. Bloqueo de asientos
+        transaction.update(tripRef, {
+          asientosOcupados: [...currentOccupied, ...formData.asientos]
+        });
+
+        // 2. Emitir boletos individuales
+        formData.asientos.forEach((seatLabel, index) => {
+          const ticketRef = doc(collection(db, 'tickets'));
+          const ticketNumber = ticketNumbers[index];
+          
+          transaction.set(ticketRef, {
             tripId: selectedTrip.id,
             ruc_empresa: rucEmpresa,
+            puntoEmision: puntoEmision,
+            secuencial: ticketNumber,
+            numeroBoleto: `${puntoEmision}-${ticketNumber.toString().padStart(9, '0')}`,
             pasajero: { cedula: formData.cedula, nombre: formData.nombre },
             asiento: seatLabel,
             tarifa: formData.tarifa,
@@ -158,23 +190,28 @@ export default function Ticketing() {
             createdAt: serverTimestamp()
           });
 
-          await addDoc(collection(db, 'cash_transactions'), {
+          const cashRef = doc(collection(db, 'cash_transactions'));
+          transaction.set(cashRef, {
             ruc_empresa: rucEmpresa,
             tipo: 'INGRESO',
-            concepto: `Boleto Asiento ${seatLabel} - ${selectedTrip.destino}`,
+            concepto: `Boleto #${ticketNumber} - Asiento ${seatLabel} - ${selectedTrip.destino}`,
             monto: formData.precioUnitario,
             vendedorId: auth.currentUser?.uid,
             createdAt: serverTimestamp()
           });
-      }
+        });
+      });
 
-      setMessage(`${formData.asientos.length} BOLETOS EMITIDOS`);
+      setMessage(`${formData.asientos.length} BOLETOS EMITIDOS CON ÉXITO`);
       setFormData({ cedula: '', nombre: '', asientos: [], tarifa: 'ADULTO', precioUnitario: 0 });
       setDataLoaded(false);
       setIsFinalConsumer(false);
       setTimeout(() => setMessage(''), 3000);
-    } catch (err) { alert("Error en el proceso de venta."); }
-    finally { setIsProcessing(false); }
+    } catch (err: any) { 
+      alert(typeof err === 'string' ? err : "Error en el proceso de venta transaccional."); 
+    } finally { 
+      setIsProcessing(false); 
+    }
   };
 
   const totalVenta = formData.asientos.length * formData.precioUnitario;

@@ -156,7 +156,7 @@ const CompanyRegister: React.FC = () => {
                     <div className="relative z-10">
                         <div className="flex items-center gap-3 mb-12">
                             <span className="material-symbols-outlined text-4xl text-[#607cec]" style={{ fontVariationSettings: "'FILL' 1" }}>directions_bus</span>
-                            <h1 className="text-2xl font-black tracking-tighter text-white font-headline">Meridian Transit</h1>
+                            <h1 className="text-2xl font-black tracking-tighter text-white font-headline">MOVU</h1>
                         </div>
                         <h2 className="text-4xl font-bold leading-tight mb-6 font-headline">
                             Optimiza la logística de tu cooperativa con precisión.

@@ -110,7 +110,7 @@ const Profile = () => {
             ))}
             <div className="pt-8">
               <button 
-                onClick={() => signOut(auth)}
+                onClick={async () => { await signOut(auth); window.location.replace('/'); }}
                 className="w-full flex items-center gap-4 px-6 py-4 rounded-2xl text-error hover:bg-error/5 transition-all font-headline font-bold text-sm"
               >
                 <span className="material-symbols-outlined">logout</span>

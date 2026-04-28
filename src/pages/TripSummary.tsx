@@ -52,7 +52,7 @@ const TripSummary: React.FC = () => {
                         </div>
                     </div>
 
-                    <button 
+                    <button
                         onClick={() => navigate('/driver-dashboard')}
                         className="w-full py-5 bg-primary text-white rounded-2xl font-black uppercase tracking-widest text-sm shadow-xl shadow-primary/20 hover:scale-[1.02] active:scale-95 transition-all"
                     >
@@ -60,8 +60,8 @@ const TripSummary: React.FC = () => {
                     </button>
                 </div>
             </div>
-            
-            <p className="mt-8 text-xs font-bold text-slate-400 uppercase tracking-tighter">Meridian Transit System v4.0.2 • Hecho con orgullo en Ecuador</p>
+
+            <p className="mt-8 text-xs font-bold text-slate-400 uppercase tracking-tighter">MOVU System v4.0.2 • Hecho con orgullo en Ecuador</p>
         </div>
     );
 };

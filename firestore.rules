@@ -1,0 +1,61 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Funciones de Ayuda
+    function isAuth() {
+      return request.auth != null;
+    }
+    
+    function getRuc() {
+      return request.auth.token.ruc_empresa;
+    }
+
+    function isOwner(ruc) {
+      return isAuth() && getRuc() == ruc;
+    }
+
+    // Aislamiento de Compañías
+    match /companies/{ruc} {
+      allow read: if isAuth(); 
+      allow write: if isOwner(ruc);
+    }
+
+    // Usuarios y Operadores
+    match /users/{uid} {
+      allow read: if isAuth();
+      allow write: if request.auth.uid == uid || isOwner(resource.data.ruc_empresa);
+    }
+
+    // Despachos y Viajes
+    match /trips/{tripId} {
+      allow read: if isAuth();
+      allow write: if isOwner(resource.data.ruc_empresa) || isOwner(request.resource.data.ruc_empresa);
+    }
+
+    // Boletos y Tickets (Aislamiento Crítico)
+    match /tickets/{ticketId} {
+      allow read: if isAuth() && (isOwner(resource.data.ruc_empresa) || request.auth.uid == resource.data.pasajero.uid);
+      allow create: if isAuth();
+      allow update, delete: if isOwner(resource.data.ruc_empresa);
+    }
+
+    // Transacciones de Caja (Silo por RUC)
+    match /cash_transactions/{txId} {
+      allow read: if isOwner(resource.data.ruc_empresa);
+      allow create: if isAuth() && isOwner(request.resource.data.ruc_empresa);
+      allow update, delete: if isOwner(resource.data.ruc_empresa);
+    }
+
+    // Unidades / Flota
+    match /units/{unitId} {
+      allow read: if isAuth();
+      allow write: if isOwner(resource.data.ruc_empresa) || isOwner(request.resource.data.ruc_empresa);
+    }
+    
+    // Rangos Secuenciales para Offline
+    match /sequential_ranges/{rangeId} {
+      allow read, write: if isOwner(resource.data.ruc_empresa) || isOwner(request.resource.data.ruc_empresa);
+    }
+  }
+}

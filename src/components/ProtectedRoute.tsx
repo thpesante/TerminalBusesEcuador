@@ -8,7 +8,7 @@ interface ProtectedRouteProps {
 }
 
 const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, allowedRoles }) => {
-  const { user, role, loading } = useAuth();
+  const { user, role, userData, loading } = useAuth();
   const location = useLocation();
 
   if (loading) {
@@ -32,8 +32,38 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, allowedRoles 
     if (role === 'OFICINA') return <Navigate to="/erp/ticketing" replace />;
     if (role === 'DATOS') return <Navigate to="/datos-dashboard" replace />;
     
-    // Si el rol no es ninguno de los conocidos, vuelta al login
     return <Navigate to="/" replace />;
+  }
+
+  // REGLAS DE ACCESO PARA STAFF (OFICINA)
+  if (role === 'OFICINA' && userData?.permissions) {
+    const path = location.pathname;
+    const permissions = userData.permissions;
+
+    // Mapa de rutas a llaves de permisos
+    const pathMap: Record<string, string> = {
+      '/erp/ticketing': 'ticketing',
+      '/erp/fleet': 'fleet',
+      '/erp/invoicing': 'invoicing',
+      '/erp/routing': 'routing',
+      '/erp/cash-close': 'cash-close',
+      '/erp/terminal': 'terminal',
+      '/erp/reports': 'reports',
+      '/erp/settings': 'settings'
+    };
+
+    const requiredPermission = pathMap[path];
+
+    if (requiredPermission && !permissions[requiredPermission]) {
+      // Si no tiene permiso para la ruta actual, buscar el primero que sí tenga
+      const firstAvailable = Object.keys(pathMap).find(p => permissions[pathMap[p]]);
+      if (firstAvailable) {
+        return <Navigate to={firstAvailable} replace />;
+      } else {
+        // Si no tiene acceso a nada, fuera
+        return <Navigate to="/" replace />;
+      }
+    }
   }
 
   return <>{children}</>;

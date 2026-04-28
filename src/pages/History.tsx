@@ -40,7 +40,7 @@ const History = () => {
       <header className="fixed top-0 w-full z-50 bg-[#f8f9fa] dark:bg-[#00113a] bg-opacity-80 backdrop-blur-xl shadow-[0_12px_40px_rgba(0,11,58,0.06)] flex justify-between items-center px-6 h-16">
         <div className="flex items-center gap-4 cursor-pointer" onClick={() => navigate('/dashboard')}>
           <span className="material-symbols-outlined text-primary text-3xl">directions_bus</span>
-          <span className="text-xl font-black text-blue-950 dark:text-white uppercase tracking-wider font-headline">Meridian Transit</span>
+          <span className="text-xl font-black text-blue-950 dark:text-white uppercase tracking-wider font-headline">MOVU</span>
         </div>
         <button onClick={() => navigate('/dashboard')} className="text-sm font-bold text-primary hover:bg-slate-200/50 px-4 py-2 rounded-lg transition-colors">Volver al Panel</button>
       </header>

@@ -8,6 +8,8 @@ import DriverDashboard from './pages/DriverDashboard';
 import History from './pages/History';
 import TerminalSchedule from './pages/TerminalSchedule';
 import TerminalMap from './pages/TerminalMap';
+import Schedules from './pages/Schedules';
+import Destinations from './pages/Destinations';
 
 import Profile from './pages/Profile';
 import VirtualTerminalView from './pages/VirtualTerminalView';
@@ -16,6 +18,8 @@ import BookingFlow from './pages/BookingFlow';
 import MyTickets from './pages/MyTickets';
 import CompanyRegister from './pages/CompanyRegister';
 import UnitRegistration from './pages/UnitRegistration';
+import DriverSchedule from './pages/DriverSchedule';
+import DriverReports from './pages/DriverReports';
 import TripSummary from './pages/TripSummary';
 import SeatDesigner from './pages/SeatDesigner';
 import UnitConfirmation from './pages/UnitConfirmation';
@@ -41,6 +45,7 @@ import Notificaciones from './pages/municipio/Notificaciones';
 
 import { AuthProvider } from './context/AuthContext';
 import ProtectedRoute from './components/ProtectedRoute';
+import PublicRoute from './components/PublicRoute';
 
 
 function App() {
@@ -50,12 +55,16 @@ function App() {
         <OfflineMaster />
         <Chatbot />
         <Routes>
-          {/* Rutas Públicas */}
-          <Route path="/" element={<Login />} />
-          <Route path="/register" element={<Register />} />
-          <Route path="/company-register" element={<CompanyRegister />} />
-          <Route path="/unit-registration" element={<UnitRegistration />} />
-          <Route path="/driver-register" element={<DriverRegister />} />
+          {/* Rutas Públicas - Protegidas para usuarios ya logueados */}
+          <Route path="/" element={<PublicRoute><Login /></PublicRoute>} />
+          <Route path="/register" element={<PublicRoute><Register /></PublicRoute>} />
+          <Route path="/company-register" element={<PublicRoute><CompanyRegister /></PublicRoute>} />
+          <Route path="/unit-registration" element={
+            <ProtectedRoute allowedRoles={['BUS', 'OFICINA']}>
+              <UnitRegistration />
+            </ProtectedRoute>
+          } />
+          <Route path="/driver-register" element={<PublicRoute><DriverRegister /></PublicRoute>} />
           
           {/* Rutas Protegidas ROL: CLIENTE */}
           <Route path="/dashboard" element={
@@ -72,6 +81,16 @@ function App() {
           <Route path="/driver-dashboard" element={
             <ProtectedRoute allowedRoles={['BUS']}>
               <DriverDashboard />
+            </ProtectedRoute>
+          } />
+          <Route path="/driver-schedule" element={
+            <ProtectedRoute allowedRoles={['BUS']}>
+              <DriverSchedule />
+            </ProtectedRoute>
+          } />
+          <Route path="/driver-reports" element={
+            <ProtectedRoute allowedRoles={['BUS']}>
+              <DriverReports />
             </ProtectedRoute>
           } />
 
@@ -105,6 +124,10 @@ function App() {
           <Route path="/cooperativa-loja" element={<CooperativaDetail />} />
           <Route path="/virtual-terminal" element={<VirtualTerminalView />} />
           <Route path="/cooperativa/:id" element={<CooperativaDetail />} />
+          
+          {/* Nuevas Rutas Públicas de Información */}
+          <Route path="/horarios" element={<Schedules />} />
+          <Route path="/destinos" element={<Destinations />} />
         </Routes>
       </BrowserRouter>
     </AuthProvider>

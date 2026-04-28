@@ -7,6 +7,8 @@ import { createUserWithEmailAndPassword } from 'firebase/auth';
 import { useAuth } from '../../context/AuthContext';
 import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
+import { ecuadorProvinces, type Province } from '../../components/erp/ecuadorData';
+import { validarCedula } from '../../utils/validators';
 
 const getSecondaryAuth = () => {
   const name = 'SecondaryApp';
@@ -211,6 +213,11 @@ function UserManagement({ companyRuc, offices }: { companyRuc: string, offices: 
   const [newOffice, setNewOffice] = useState('');
   const [idValidated, setIdValidated] = useState(false);
 
+  const [selectedProvince, setSelectedProvince] = useState('');
+  const [selectedCanton, setSelectedCanton] = useState('');
+
+  const availableCantons = ecuadorProvinces.find(p => p.name === selectedProvince)?.cantons || [];
+
   const fetchUsers = async () => {
     if (!companyRuc) return;
     setLoading(true);
@@ -231,7 +238,11 @@ function UserManagement({ companyRuc, offices }: { companyRuc: string, offices: 
   };
 
   const handleVerifyId = async () => {
-    if (newCedula.length !== 10) return;
+    if (!validarCedula(newCedula)) {
+      alert("Cédula ecuatoriana inválida (Algoritmo Módulo 10). Verifique los dígitos.");
+      return;
+    }
+    
     try {
       const proxyUrl = 'https://infoplacas.herokuapp.com/';
       const targetUrl = 'https://si.secap.gob.ec/sisecap/logeo_web/json/busca_persona_registro_civil.php';
@@ -255,6 +266,7 @@ function UserManagement({ companyRuc, offices }: { companyRuc: string, offices: 
       await setDoc(doc(db, 'users', userCredential.user.uid), {
         ruc_empresa: companyRuc, nombre: newNombre, apellido: newApellido, email: newEmail,
         role: 'OFICINA', officeId: newOffice, enabled: true,
+        provincia: selectedProvince, canton: selectedCanton,
         permissions: { terminal: true, fleet: true, ticketing: true, routing: true, invoicing: true, reports: true, 'cash-close': true, settings: false },
         createdAt: serverTimestamp()
       });
@@ -302,6 +314,29 @@ function UserManagement({ companyRuc, offices }: { companyRuc: string, offices: 
                     {offices.map(o => <option key={o.numeroEstablecimiento} value={o.numeroEstablecimiento}>{o.numeroEstablecimiento} - {o.nombreFantasiaComercial || 'OFI'}</option>)}
                   </select>
                 </div>
+                <div className="space-y-4">
+                  <label className="text-[11px] font-black uppercase text-[#00216e]">Provincia</label>
+                  <select 
+                    value={selectedProvince} 
+                    onChange={(e) => { setSelectedProvince(e.target.value); setSelectedCanton(''); }} 
+                    className="w-full bg-slate-50 border-2 rounded-2xl h-14 px-8 font-bold outline-none font-sans appearance-none"
+                  >
+                    <option value="">SELECCIONAR PROVINCIA</option>
+                    {ecuadorProvinces.map(p => <option key={p.name} value={p.name}>{p.name}</option>)}
+                  </select>
+                </div>
+                <div className="space-y-4">
+                  <label className="text-[11px] font-black uppercase text-[#00216e]">Cantón</label>
+                  <select 
+                    value={selectedCanton} 
+                    onChange={(e) => setSelectedCanton(e.target.value)} 
+                    disabled={!selectedProvince}
+                    className="w-full bg-slate-50 border-2 rounded-2xl h-14 px-8 font-bold outline-none font-sans appearance-none disabled:opacity-50"
+                  >
+                    <option value="">SELECCIONAR CANTÓN</option>
+                    {availableCantons.map(c => <option key={c} value={c}>{c}</option>)}
+                  </select>
+                </div>
                 <div className="md:col-span-2 space-y-4">
                    <label className="text-[11px] font-black uppercase text-slate-400">Nombre Completo</label>
                    <input value={`${newNombre} ${newApellido}`} readOnly className="w-full bg-slate-100 rounded-2xl h-14 px-8 font-black uppercase italic font-sans" />
@@ -328,7 +363,14 @@ function UserManagement({ companyRuc, offices }: { companyRuc: string, offices: 
                 <div className="w-16 h-16 rounded-3xl bg-[#00216e]/5 text-[#00216e] flex items-center justify-center font-black text-2xl shadow-inner">{user.nombre?.[0]}</div>
                 <div>
                   <h4 className="text-lg font-black text-[#00216e] uppercase leading-none mb-2">{user.nombre}</h4>
-                  <p className="text-[9px] font-black uppercase text-slate-400">ID: {user.cedula}</p>
+                  <div className="flex flex-col gap-1">
+                    <p className="text-[9px] font-black uppercase text-slate-400">ID: {user.cedula}</p>
+                    {user.provincia && (
+                      <p className="text-[9px] font-black uppercase text-blue-500/60 tracking-tight">
+                        {user.provincia} • {user.canton}
+                      </p>
+                    )}
+                  </div>
                 </div>
              </div>
              <div className="flex justify-between items-center bg-slate-50 p-6 rounded-3xl group-hover:bg-[#00216e]/5 transition-colors">

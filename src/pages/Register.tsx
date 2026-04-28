@@ -1,12 +1,13 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { auth, db, isDemoMode } from '../firebase';
 import { createUserWithEmailAndPassword } from 'firebase/auth';
 import { doc, setDoc } from 'firebase/firestore';
+import { validarCedula, validarRUC } from '../utils/validators';
 
 const Register: React.FC = () => {
   const navigate = useNavigate();
-  const [cedula, setCedula] = useState('');
+  const [identificacion, setIdentificacion] = useState('');
   const [nombre, setNombre] = useState('');
   const [apellido, setApellido] = useState('');
   const [fechaNacimiento, setFechaNacimiento] = useState('');
@@ -19,71 +20,95 @@ const Register: React.FC = () => {
   const [isValidated, setIsValidated] = useState(false);
   const [error, setError] = useState('');
 
-  const handleCedulaBlur = async () => {
-    if (cedula.length === 10 && !isNaN(Number(cedula))) {
-      setLoading(true);
-      setError('');
+  const handleVerify = async () => {
+    setError('');
+    const isRuc = identificacion.length === 13;
+    const isCedula = identificacion.length === 10;
 
-      if (isDemoMode) {
-        await new Promise(resolve => setTimeout(resolve, 800));
-        if (cedula === '0103869137') {
-          setNombre('PEDRO ARMANDO');
-          setApellido('PESANTEZ');
-          setFechaNacimiento('1990-05-15');
-        } else {
-          setNombre('USUARIO');
-          setApellido('DE PRUEBA');
-          setFechaNacimiento('1995-10-20');
-        }
-        setIsValidated(true);
-        setLoading(false);
-        return;
+    if (!isRuc && !isCedula) {
+      setError('Ingrese 10 dígitos para Cédula o 13 para RUC.');
+      return;
+    }
+
+    if (isCedula && !validarCedula(identificacion)) {
+      setError('Cédula inválida (Algoritmo Módulo 10).');
+      return;
+    }
+
+    if (isRuc && !validarRUC(identificacion)) {
+      setError('RUC inválido (Debe terminar en 001).');
+      return;
+    }
+
+    setLoading(true);
+
+    if (isDemoMode) {
+      await new Promise(resolve => setTimeout(resolve, 800));
+      if (identificacion === '0103869137') {
+        setNombre('PEDRO ARMANDO');
+        setApellido('PESANTEZ');
+        setFechaNacimiento('1990-05-15');
+      } else if (isRuc) {
+        setNombre('TRANSPORTES ECUADOR S.A.');
+        setApellido('');
+        setFechaNacimiento('');
+      } else {
+        setNombre('USUARIO');
+        setApellido('DE PRUEBA');
+        setFechaNacimiento('1995-10-20');
       }
+      setIsValidated(true);
+      setLoading(false);
+      return;
+    }
 
-      try {
-        const proxyUrl = 'https://infoplacas.herokuapp.com/';
-        // ...
-        const targetUrl = 'https://si.secap.gob.ec/sisecap/logeo_web/json/busca_persona_registro_civil.php';
+    try {
+      const proxyUrl = 'https://infoplacas.herokuapp.com/';
+      let targetUrl = '';
+      let params = new URLSearchParams();
 
-        const params = new URLSearchParams();
-        params.append('documento', cedula);
-        params.append('tipo', '1');
-
-        const response = await fetch(proxyUrl + targetUrl, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/x-www-form-urlencoded',
-          },
-          body: params
-        });
-
-        if (!response.ok) throw new Error('Error en la solicitud');
-
+      if (isRuc) {
+        // API RUC
+        targetUrl = `https://aggregator.cipherbyte.ec/company/${identificacion}`;
+        const response = await fetch(proxyUrl + targetUrl);
         const data = await response.json();
-
-        if (data && data.nombres && data.apellidos) {
+        if (data && data.razonSocial) {
+          setNombre(data.razonSocial);
+          setApellido('');
+          setFechaNacimiento('');
+          setIsValidated(true);
+        } else {
+          throw new Error('No se encontró el RUC.');
+        }
+      } else {
+        // API Cédula
+        targetUrl = 'https://si.secap.gob.ec/sisecap/logeo_web/json/busca_persona_registro_civil.php';
+        params.append('documento', identificacion);
+        params.append('tipo', '1');
+        const response = await fetch(proxyUrl + targetUrl, { method: 'POST', body: params });
+        const data = await response.json();
+        if (data && data.nombres) {
           setNombre(data.nombres);
           setApellido(data.apellidos);
           setFechaNacimiento(data.fechaNacimiento || '');
           setIsValidated(true);
         } else {
-          setError('No se encontraron datos para esta cédula');
-          setIsValidated(false);
+          throw new Error('No se encontró la Cédula.');
         }
-      } catch (err) {
-        console.error(err);
-        setError('Error al validar la cédula. Intenta de nuevo.');
-        setIsValidated(false);
-      } finally {
-        setLoading(false);
       }
+    } catch (err: any) {
+      console.error(err);
+      setError(err.message || 'Error al validar la identidad.');
+      setIsValidated(false);
+    } finally {
+      setLoading(false);
     }
   };
 
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!isValidated) {
-      setError('Primero debes validar tu cédula');
+      setError('Primero debes validar tu identidad');
       return;
     }
 
@@ -95,7 +120,8 @@ const Register: React.FC = () => {
       const user = userCredential.user;
 
       await setDoc(doc(db, 'users', user.uid), {
-        cedula,
+        identificacion,
+        cedula: identificacion,
         nombre,
         apellido,
         fechaNacimiento,
@@ -146,7 +172,7 @@ const Register: React.FC = () => {
                   </div>
                   <div>
                     <h3 className="font-bold text-sm">Seguridad Total</h3>
-                    <p className="text-xs opacity-70">Identidad validada por el Registro Civil.</p>
+                    <p className="text-xs opacity-70">Identidad validada automáticamente.</p>
                   </div>
                 </div>
                 <div className="flex items-center gap-4">
@@ -160,13 +186,6 @@ const Register: React.FC = () => {
                 </div>
               </div>
             </div>
-            <div className="relative rounded-[2rem] overflow-hidden h-48">
-              <img className="w-full h-full object-cover" alt="Bus en Ecuador" src="https://images.unsplash.com/photo-1544620347-c4fd4a3d5957?auto=format&fit=crop&q=80&w=800" />
-              <div className="absolute inset-0 bg-gradient-to-t from-primary/60 to-transparent"></div>
-              <div className="absolute bottom-4 left-6">
-                <span className="text-xs font-bold text-secondary-fixed tracking-widest uppercase">Ecuador Conectado</span>
-              </div>
-            </div>
           </div>
 
           {/* Right Side: Form */}
@@ -174,7 +193,7 @@ const Register: React.FC = () => {
             <div className="bg-surface-container-lowest p-8 rounded-[2rem] shadow-sm">
               <div className="mb-8">
                 <h2 className="text-2xl font-bold text-primary mb-2 font-headline">Crear nueva cuenta</h2>
-                <p className="text-slate-500 text-sm font-body">Ingresa tus datos personales para continuar con el registro.</p>
+                <p className="text-slate-500 text-sm font-body">Ingresa tu identificación para validar tus datos.</p>
               </div>
 
               <form onSubmit={handleRegister} className="space-y-6">
@@ -186,43 +205,55 @@ const Register: React.FC = () => {
                 )}
 
                 <div className="flex flex-col gap-2">
-                  <label className="text-[10px] font-bold uppercase tracking-widest text-slate-400 ml-1">Cédula de Identidad (10 dígitos)</label>
-                  <div className="relative group">
-                    <input
-                      className="w-full bg-surface-container-low border-none rounded-2xl py-4 pl-12 pr-4 focus:ring-2 focus:ring-primary/20 transition-all text-on-surface font-semibold placeholder:font-normal placeholder:text-slate-400"
-                      maxLength={10}
-                      placeholder="Ej: 1712345678"
-                      type="text"
-                      value={cedula}
-                      onChange={(e) => setCedula(e.target.value)}
-                      onBlur={handleCedulaBlur}
-                      required
-                    />
-                    <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-primary transition-colors">badge</span>
-                    {loading && <div className="absolute right-4 top-1/2 -translate-y-1/2 animate-spin rounded-full h-4 w-4 border-2 border-primary border-t-transparent"></div>}
+                  <label className="text-[10px] font-bold uppercase tracking-widest text-slate-400 ml-1">Identificación (Cédula o RUC)</label>
+                  <div className="flex gap-2">
+                    <div className="relative group flex-1">
+                      <input
+                        className="w-full bg-surface-container-low border-none rounded-2xl py-4 pl-12 pr-4 focus:ring-2 focus:ring-primary/20 transition-all text-on-surface font-semibold placeholder:font-normal placeholder:text-slate-400"
+                        maxLength={13}
+                        placeholder="Ej: 1712345678 o 1712345678001"
+                        type="text"
+                        value={identificacion}
+                        onChange={(e) => setIdentificacion(e.target.value)}
+                        required
+                      />
+                      <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-primary transition-colors">badge</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleVerify}
+                      disabled={loading || identificacion.length < 10}
+                      className="bg-primary text-white px-6 rounded-2xl font-bold text-xs uppercase tracking-widest hover:brightness-110 transition-all disabled:opacity-50"
+                    >
+                      {loading ? '...' : 'Verificar'}
+                    </button>
                   </div>
                 </div>
 
                 <div className={`grid grid-cols-1 md:grid-cols-2 gap-4 transition-opacity duration-300 ${isValidated ? 'opacity-100' : 'opacity-40 pointer-events-none'}`}>
-                  <div className="flex flex-col gap-2">
-                    <label className="text-[10px] font-bold uppercase tracking-widest text-slate-400 ml-1">Nombres</label>
-                    <div className="bg-surface-container border-none rounded-2xl py-4 px-4 text-on-surface-variant font-medium">
+                  <div className="flex flex-col gap-2 md:col-span-2">
+                    <label className="text-[10px] font-bold uppercase tracking-widest text-slate-400 ml-1">Nombre / Razón Social</label>
+                    <div className="bg-surface-container border-none rounded-2xl py-4 px-4 text-on-surface-variant font-black uppercase">
                       {nombre || '---'}
                     </div>
                   </div>
-                  <div className="flex flex-col gap-2">
-                    <label className="text-[10px] font-bold uppercase tracking-widest text-slate-400 ml-1">Apellidos</label>
-                    <div className="bg-surface-container border-none rounded-2xl py-4 px-4 text-on-surface-variant font-medium">
-                      {apellido || '---'}
+                  {apellido && (
+                    <div className="flex flex-col gap-2">
+                      <label className="text-[10px] font-bold uppercase tracking-widest text-slate-400 ml-1">Apellidos</label>
+                      <div className="bg-surface-container border-none rounded-2xl py-4 px-4 text-on-surface-variant font-black uppercase">
+                        {apellido}
+                      </div>
                     </div>
-                  </div>
-                  <div className="flex flex-col gap-2 md:col-span-2">
-                    <label className="text-[10px] font-bold uppercase tracking-widest text-slate-400 ml-1">Fecha de Nacimiento</label>
-                    <div className="bg-surface-container border-none rounded-2xl py-4 px-4 text-on-surface-variant font-medium flex items-center gap-2">
-                      <span className="material-symbols-outlined text-sm">calendar_today</span>
-                      {fechaNacimiento || '---'}
+                  )}
+                  {fechaNacimiento && (
+                    <div className="flex flex-col gap-2">
+                      <label className="text-[10px] font-bold uppercase tracking-widest text-slate-400 ml-1">Fecha de Nacimiento</label>
+                      <div className="bg-surface-container border-none rounded-2xl py-4 px-4 text-on-surface-variant font-medium flex items-center gap-2">
+                        <span className="material-symbols-outlined text-sm">calendar_today</span>
+                        {fechaNacimiento}
+                      </div>
                     </div>
-                  </div>
+                  )}
                 </div>
 
                 <div className={`space-y-4 pt-4 border-t border-surface-container-high transition-all duration-300 ${isValidated ? 'block' : 'hidden'}`}>
@@ -272,39 +303,6 @@ const Register: React.FC = () => {
                       </div>
                     </div>
                   </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="flex flex-col gap-2">
-                      <label className="text-[10px] font-bold uppercase tracking-widest text-slate-400 ml-1">Provincia</label>
-                      <select
-                        className="w-full bg-surface-container-low border-none rounded-2xl py-4 px-4 focus:ring-2 focus:ring-primary/20 transition-all appearance-none cursor-pointer font-body"
-                        value={provincia}
-                        onChange={(e) => setProvincia(e.target.value)}
-                        required
-                      >
-                        <option value="">Seleccionar...</option>
-                        <option value="Azuay">Azuay</option>
-                        <option value="Guayas">Guayas</option>
-                        <option value="Pichincha">Pichincha</option>
-                        {/* More provinces... */}
-                      </select>
-                    </div>
-                    <div className="flex flex-col gap-2">
-                      <label className="text-[10px] font-bold uppercase tracking-widest text-slate-400 ml-1">Cantón</label>
-                      <select
-                        className="w-full bg-surface-container-low border-none rounded-2xl py-4 px-4 focus:ring-2 focus:ring-primary/20 transition-all appearance-none cursor-pointer font-body"
-                        value={canton}
-                        onChange={(e) => setCanton(e.target.value)}
-                        required
-                      >
-                        <option value="">Seleccionar...</option>
-                        <option value="Cuenca">Cuenca</option>
-                        <option value="Guayaquil">Guayaquil</option>
-                        <option value="Quito">Quito</option>
-                        {/* More cantons... */}
-                      </select>
-                    </div>
-                  </div>
                 </div>
 
                 <div className="pt-6">
@@ -313,24 +311,14 @@ const Register: React.FC = () => {
                     type="submit"
                     disabled={!isValidated || loading}
                   >
-                    <span>{loading ? 'Procesando...' : 'Continuar Registro'}</span>
-                    <span className="material-symbols-outlined">arrow_forward</span>
+                    <span>{loading ? 'Procesando...' : 'Finalizar Registro'}</span>
+                    <span className="material-symbols-outlined">how_to_reg</span>
                   </button>
                   <p className="text-center mt-6 text-sm text-slate-400 font-body">
                     ¿Ya tienes una cuenta? <Link className="text-primary font-bold hover:underline" to="/">Inicia Sesión</Link>
                   </p>
                 </div>
               </form>
-            </div>
-
-            <div className="bg-secondary-container/10 p-6 rounded-[2rem] flex items-start gap-4">
-              <div className="bg-secondary-container p-3 rounded-xl text-on-secondary-container">
-                <span className="material-symbols-outlined">info</span>
-              </div>
-              <div>
-                <h4 className="font-bold text-on-secondary-container text-sm font-headline">Privacidad y Datos</h4>
-                <p className="text-on-secondary-container/70 text-xs mt-1 font-body">Tus datos están protegidos bajo la Ley de Protección de Datos Personales del Ecuador. Solo utilizamos tu información para la gestión de tus viajes.</p>
-              </div>
             </div>
           </div>
         </div>
@@ -339,11 +327,6 @@ const Register: React.FC = () => {
       <footer className="mt-auto py-8 border-t border-surface-container-high bg-white">
         <div className="max-w-4xl mx-auto px-6 flex flex-col md:flex-row justify-between items-center gap-4">
           <span className="text-slate-400 text-xs font-medium">© 2024 TransporteEcuador - Todos los derechos reservados</span>
-          <div className="flex gap-6">
-            <a className="text-xs text-slate-400 hover:text-primary transition-colors" href="#">Términos</a>
-            <a className="text-xs text-slate-400 hover:text-primary transition-colors" href="#">Privacidad</a>
-            <a className="text-xs text-slate-400 hover:text-primary transition-colors" href="#">Contacto</a>
-          </div>
         </div>
       </footer>
     </div>
